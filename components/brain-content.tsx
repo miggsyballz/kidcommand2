@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Brain,
   Plus,
@@ -45,8 +46,10 @@ import {
   Download,
   FileText,
   Database,
+  Zap,
+  MessageSquare,
+  RefreshCw,
 } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface KnowledgeEntry {
   id: string
@@ -102,30 +105,94 @@ export function BrainContent() {
     instructions: "",
   })
 
-  // Load entries from localStorage on component mount
+  const [systemPrompt, setSystemPrompt] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [lastSaved, setLastSaved] = useState<string | null>(null)
+  const [stats, setStats] = useState({
+    totalConversations: 0,
+    totalTokens: 0,
+    avgResponseTime: 0,
+  })
+
   useEffect(() => {
-    const savedEntries = localStorage.getItem("musicmaster-brain-entries")
-    if (savedEntries) {
-      try {
-        setEntries(JSON.parse(savedEntries))
-      } catch (error) {
-        console.error("Error loading brain entries:", error)
-      }
-    }
+    loadBrainData()
   }, [])
 
-  // Save entries to localStorage whenever entries change
-  useEffect(() => {
-    localStorage.setItem("musicmaster-brain-entries", JSON.stringify(entries))
-  }, [entries])
+  const loadBrainData = () => {
+    try {
+      const stored = localStorage.getItem("kidcommand_brain_prompt")
+      if (stored) {
+        setSystemPrompt(stored)
+      } else {
+        // Default system prompt
+        setSystemPrompt(`You are Kid Kelly's AI assistant for Kid Command Radio Station. You help manage playlists, analyze music data, and provide insights about the radio station's music library.
 
-  // Clear feedback after 5 seconds
-  useEffect(() => {
-    if (feedback) {
-      const timer = setTimeout(() => setFeedback(null), 5000)
-      return () => clearTimeout(timer)
+Key responsibilities:
+- Help create and manage playlists
+- Analyze music trends and patterns
+- Suggest songs based on criteria
+- Provide radio programming insights
+- Answer questions about the music library
+
+Always be helpful, professional, and focused on radio station operations.`)
+      }
+
+      const savedTime = localStorage.getItem("kidcommand_brain_last_saved")
+      if (savedTime) {
+        setLastSaved(new Date(savedTime).toLocaleString())
+      }
+
+      // Load mock stats (in real app, these would come from API)
+      setStats({
+        totalConversations: 47,
+        totalTokens: 12543,
+        avgResponseTime: 1.2,
+      })
+
+      const savedEntries = localStorage.getItem("musicmaster-brain-entries")
+      if (savedEntries) {
+        try {
+          setEntries(JSON.parse(savedEntries))
+        } catch (error) {
+          console.error("Error loading brain entries:", error)
+        }
+      }
+    } catch (error) {
+      console.error("Error loading brain data:", error)
     }
-  }, [feedback])
+  }
+
+  const saveBrainData = async () => {
+    setIsLoading(true)
+    try {
+      localStorage.setItem("kidcommand_brain_prompt", systemPrompt)
+      localStorage.setItem("kidcommand_brain_last_saved", new Date().toISOString())
+
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      setLastSaved(new Date().toLocaleString())
+    } catch (error) {
+      console.error("Error saving brain data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const resetToDefault = () => {
+    if (confirm("Are you sure you want to reset to the default system prompt? This cannot be undone.")) {
+      setSystemPrompt(`You are Kid Kelly's AI assistant for Kid Command Radio Station. You help manage playlists, analyze music data, and provide insights about the radio station's music library.
+
+Key responsibilities:
+- Help create and manage playlists
+- Analyze music trends and patterns
+- Suggest songs based on criteria
+- Provide radio programming insights
+- Answer questions about the music library
+
+Always be helpful, professional, and focused on radio station operations.`)
+    }
+  }
 
   const validateForm = () => {
     const errors = {
@@ -529,15 +596,118 @@ export function BrainContent() {
     <div className="space-y-6">
       <Card className="retro-card">
         <CardHeader>
-          <CardTitle className="neon-text flex items-center gap-2">
-            <Brain className="h-6 w-6" />
-            THE BRAIN
-          </CardTitle>
-          <CardDescription>
-            Manage MusicMaster knowledge entries that power your AI assistant's responses
-          </CardDescription>
+          <div className="flex items-center gap-2">
+            <Brain className="h-6 w-6 text-purple-600" />
+            <div>
+              <CardTitle className="neon-text flex items-center gap-2 text-2xl">THE BRAIN</CardTitle>
+              <CardDescription>Configure your AI assistant's personality and knowledge base</CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
+          <Alert className="bg-cyan-500/10 border-cyan-500 text-cyan-600">
+            <Zap className="h-4 w-4" />
+            <AlertDescription>
+              THE BRAIN is the core intelligence that powers your AI assistant. Customize how it thinks, responds, and
+              helps you manage your radio station.
+            </AlertDescription>
+          </Alert>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageSquare className="h-4 w-4 text-blue-500" />
+                  <span className="font-medium">Conversations</span>
+                </div>
+                <div className="text-2xl font-bold">{stats.totalConversations}</div>
+                <p className="text-xs text-muted-foreground">Total chats</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Database className="h-4 w-4 text-green-500" />
+                  <span className="font-medium">Tokens Used</span>
+                </div>
+                <div className="text-2xl font-bold">{stats.totalTokens.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">Processing power</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="h-4 w-4 text-yellow-500" />
+                  <span className="font-medium">Response Time</span>
+                </div>
+                <div className="text-2xl font-bold">{stats.avgResponseTime}s</div>
+                <p className="text-xs text-muted-foreground">Average speed</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="system-prompt" className="text-base font-medium">
+                  System Prompt
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Define how your AI assistant behaves and what it knows about your radio station
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  {systemPrompt.length} characters
+                </Badge>
+                {lastSaved && (
+                  <Badge variant="secondary" className="text-xs">
+                    Saved {lastSaved}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <Textarea
+              id="system-prompt"
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="Enter your system prompt..."
+              className="min-h-[300px] font-mono text-sm"
+            />
+
+            <div className="flex items-center gap-2">
+              <Button onClick={saveBrainData} disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Brain Configuration
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" onClick={resetToDefault}>
+                Reset to Default
+              </Button>
+            </div>
+          </div>
+
+          <Alert className="bg-cyan-500/10 border-cyan-500 text-cyan-600">
+            <Brain className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Pro Tip:</strong> Include specific information about your radio station, music preferences, and
+              typical workflows to make your AI assistant more helpful and personalized.
+            </AlertDescription>
+          </Alert>
+
           {/* Feedback Alert */}
           {feedback && (
             <Alert className={feedback.type === "success" ? "border-green-500" : "border-red-500"}>

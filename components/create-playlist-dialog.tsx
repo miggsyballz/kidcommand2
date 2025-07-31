@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
-import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -15,19 +15,21 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Plus } from "lucide-react"
+import { usePlaylists } from "../hooks/use-playlists"
 
 interface CreatePlaylistDialogProps {
-  onCreatePlaylist: (name: string, status: "active" | "draft" | "archived", prompt?: string) => Promise<void>
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  onCreatePlaylist?: (name: string, description?: string) => Promise<any>
 }
 
-export function CreatePlaylistDialog({ onCreatePlaylist }: CreatePlaylistDialogProps) {
-  const [open, setOpen] = useState(false)
+export function CreatePlaylistDialog({ open, onOpenChange, onCreatePlaylist }: CreatePlaylistDialogProps) {
   const [name, setName] = useState("")
-  const [status, setStatus] = useState<"active" | "draft" | "archived">("draft")
-  const [prompt, setPrompt] = useState("")
+  const [description, setDescription] = useState("")
   const [isCreating, setIsCreating] = useState(false)
+  const { createPlaylist } = usePlaylists()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,77 +37,80 @@ export function CreatePlaylistDialog({ onCreatePlaylist }: CreatePlaylistDialogP
 
     setIsCreating(true)
     try {
-      await onCreatePlaylist(name.trim(), status, prompt.trim() || undefined)
-      setOpen(false)
+      if (onCreatePlaylist) {
+        await onCreatePlaylist(name.trim(), description.trim() || undefined)
+      } else {
+        await createPlaylist(name.trim(), description.trim() || undefined)
+      }
+
       setName("")
-      setStatus("draft")
-      setPrompt("")
+      setDescription("")
+      onOpenChange?.(false)
     } catch (error) {
-      console.error("Failed to create playlist:", error)
+      console.error("Error creating playlist:", error)
     } finally {
       setIsCreating(false)
     }
   }
 
+  const content = (
+    <DialogContent className="sm:max-w-[425px]">
+      <DialogHeader>
+        <DialogTitle>Create New Playlist</DialogTitle>
+        <DialogDescription>Create a new playlist to organize your music collection.</DialogDescription>
+      </DialogHeader>
+      <form onSubmit={handleSubmit}>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter playlist name..."
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="description">Description (optional)</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter playlist description..."
+              rows={3}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange?.(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={!name.trim() || isCreating}>
+            {isCreating ? "Creating..." : "Create Playlist"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  )
+
+  if (open !== undefined) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        {content}
+      </Dialog>
+    )
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog>
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
           Create Playlist
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create New Playlist</DialogTitle>
-            <DialogDescription>Add a new playlist to your collection. You can always edit it later.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Playlist Name</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter playlist name..."
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={status} onValueChange={(value: "active" | "draft" | "archived") => setStatus(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="prompt">AI Prompt (Optional)</Label>
-              <Textarea
-                id="prompt"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the type of music for this playlist..."
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!name.trim() || isCreating}>
-              {isCreating ? "Creating..." : "Create Playlist"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+      {content}
     </Dialog>
   )
 }

@@ -10,29 +10,28 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
     const checkAuth = () => {
-      const isLoggedIn = localStorage.getItem("isLoggedIn")
-      const isAuthenticated = localStorage.getItem("isAuthenticated")
-
-      if (isLoggedIn === "true" || isAuthenticated === "true") {
+      const authStatus = localStorage.getItem("isAuthenticated")
+      if (authStatus === "true") {
         setIsAuthenticated(true)
       } else {
-        setIsAuthenticated(false)
         router.push("/login")
       }
+      setIsLoading(false)
     }
 
     checkAuth()
   }, [router])
 
-  if (isAuthenticated === null) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
       </div>
     )
   }

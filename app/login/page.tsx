@@ -4,19 +4,19 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Music } from "lucide-react"
+import { Loader2 } from "lucide-react"
+import Image from "next/image"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -25,89 +25,98 @@ export default function LoginPage() {
     setError("")
 
     // Demo credentials
-    if (email === "kid.kelly@radiostation.com" && password === "KidCommand2024!") {
-      localStorage.setItem("isLoggedIn", "true")
+    const demoEmail = "kid.kelly@radiostation.com"
+    const demoPassword = "KidCommand2024!"
+
+    if (email === demoEmail && password === demoPassword) {
       localStorage.setItem("isAuthenticated", "true")
-      router.push("/dashboard")
+      localStorage.setItem("userEmail", email)
+      router.push("/")
     } else {
-      setError("Invalid credentials. Please use the demo credentials shown below.")
+      setError("Invalid credentials. Please use the demo credentials provided.")
     }
 
     setIsLoading(false)
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="p-3 bg-primary rounded-full">
-              <Music className="h-8 w-8 text-primary-foreground" />
-            </div>
-          </div>
-          <CardTitle className="text-2xl font-bold">Welcome to Kid Command</CardTitle>
-          <CardDescription>Sign in to access your music dashboard</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <Image
+            src="/kidcommand_logo.png"
+            alt="Kid Command Logo"
+            width={120}
+            height={120}
+            className="mx-auto rounded-lg"
+          />
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">Welcome to Kid Command</h2>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Sign in to your radio station dashboard</p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Sign In</CardTitle>
+            <CardDescription>Enter your credentials to access the dashboard</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
-                  type={showPassword ? "text" : "password"}
+                  type="password"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
+              </div>
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign In"
+                )}
+              </Button>
+            </form>
+
+            <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Demo Credentials</h3>
+              <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                <p>
+                  <strong>Email:</strong> kid.kelly@radiostation.com
+                </p>
+                <p>
+                  <strong>Password:</strong> KidCommand2024!
+                </p>
               </div>
             </div>
-
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Signing in..." : "Sign In"}
-            </Button>
-          </form>
-
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h3 className="font-semibold text-blue-900 mb-2">Demo Credentials</h3>
-            <div className="text-sm text-blue-800 space-y-1">
-              <p>
-                <strong>Email:</strong> kid.kelly@radiostation.com
-              </p>
-              <p>
-                <strong>Password:</strong> KidCommand2024!
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

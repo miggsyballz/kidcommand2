@@ -3,14 +3,13 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { AuthGuard } from "@/components/auth-guard"
-import { DashboardShell } from "@/components/dashboard-shell"
+import { SidebarProvider } from "@/components/ui/sidebar"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Kid Command - Music Dashboard",
-  description: "Radio programming and music management dashboard",
+  title: "Kid Command - Radio Station Management",
+  description: "Professional radio station playlist and music management system",
     generator: 'v0.dev'
 }
 
@@ -20,12 +19,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AuthGuard>
-            <DashboardShell>{children}</DashboardShell>
-          </AuthGuard>
+          <SidebarProvider>{children}</SidebarProvider>
         </ThemeProvider>
       </body>
     </html>

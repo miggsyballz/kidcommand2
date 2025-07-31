@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import PlaylistManagerContent from "../../components/playlist-manager-content" // Using lowercase version
+import { PlaylistManagerContent } from "../../components/playlist-manager-content" // Using lowercase version
 import { usePlaylists } from "../../hooks/use-playlists"
 import { Loader2, Database } from "lucide-react"
 import { CreatePlaylistDialog } from "../../components/create-playlist-dialog"

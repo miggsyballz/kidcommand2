@@ -22,7 +22,7 @@ interface Playlist {
   song_count: number
 }
 
-export default function LibraryContent() {
+export function LibraryContent() {
   const [songs, setSongs] = useState<Song[]>([])
   const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [loading, setLoading] = useState(true)

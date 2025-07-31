@@ -442,5 +442,3 @@ export function UploadDataContent() {
     </div>
   )
 }
-
-export default UploadDataContent

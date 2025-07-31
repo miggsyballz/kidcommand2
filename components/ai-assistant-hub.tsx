@@ -124,7 +124,7 @@ export function AIAssistantHub() {
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li>• Natural language conversations</li>
                 <li>• Smart playlist management</li>
-                <li>• Advanced music search</li>
+                <li>��� Advanced music search</li>
                 <li>• Library analytics and insights</li>
                 <li>• AI-powered recommendations</li>
                 <li>• Export chat history</li>
