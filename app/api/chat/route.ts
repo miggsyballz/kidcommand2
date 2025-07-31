@@ -1,104 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server"
-import OpenAI from "openai"
-import { supabase } from "@/lib/supabase"
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+import { generateText } from "ai"
+import { openai } from "@ai-sdk/openai"
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if API key is configured
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "OpenAI API key not configured. Please set OPENAI_API_KEY environment variable." },
-        { status: 500 },
-      )
-    }
-
     const { message, context } = await request.json()
 
-    if (!message) {
-      return NextResponse.json({ error: "Message is required" }, { status: 400 })
-    }
+    const systemPrompt = `You are Kid Command AI, a specialized radio programming assistant focused on MusicMaster software and radio station operations. You help radio programmers, music directors, and station managers with:
 
-    // Get relevant context from database if needed
-    let dbContext = null
-    const lowerMessage = message.toLowerCase()
+- MusicMaster software expertise (scheduling, library management, reporting)
+- Radio programming strategies (playlist creation, rotation management, daypart programming)
+- Music library organization and data management
+- Import/export procedures and CSV handling
+- Radio automation and workflow optimization
+- Industry best practices for radio programming
 
-    if (lowerMessage.includes("playlist") || lowerMessage.includes("library") || lowerMessage.includes("stats")) {
-      try {
-        // Fetch relevant data for context
-        const [playlistsResult, songsResult] = await Promise.all([
-          supabase.from("playlists").select("name, song_count").limit(10),
-          supabase.from("playlist_entries").select("Title, Artist, Catergory, Energy, Tempo").limit(20),
-        ])
+You provide practical, actionable advice with specific steps and examples. Always be professional, knowledgeable, and focused on radio programming solutions.
 
-        dbContext = {
-          playlists: playlistsResult.data || [],
-          recentSongs: songsResult.data || [],
-          playlistCount: playlistsResult.data?.length || 0,
-          songCount: songsResult.data?.length || 0,
-        }
-      } catch (dbError) {
-        console.error("Database context error:", dbError)
-        // Continue without database context
-      }
-    }
+Context: You are assisting with radio programming and MusicMaster software questions.`
 
-    const systemPrompt = `You are an AI music production assistant for Mr. Mig, a music producer who runs MaxxBeats.com where he sells instrumentals, plugins, music production services, and courses.
-
-Your role is to help with:
-- Beat making and music production advice
-- Business guidance for MaxxBeats.com
-- Playlist organization and music library management
-- Client relations and pricing strategies
-- Plugin recommendations and workflow optimization
-- Music industry trends and marketing
-
-Keep responses concise, practical, and focused on music production. Use emojis and formatting to make responses engaging. Always consider the context of a professional music producer's needs.
-
-Current context: ${context ? JSON.stringify(context) : "General music production assistance"}
-Database context: ${dbContext ? JSON.stringify(dbContext) : "No database context available"}`
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: message,
-        },
-      ],
-      max_tokens: 500,
-      temperature: 0.7,
+    const { text } = await generateText({
+      model: openai("gpt-4o"),
+      system: systemPrompt,
+      prompt: message,
     })
 
-    const aiResponse =
-      completion.choices[0]?.message?.content || "I'm having trouble generating a response right now. Please try again!"
-
-    return NextResponse.json({ response: aiResponse })
-  } catch (error: any) {
-    console.error("Chat API Error:", error)
-
-    // Provide specific error messages
-    if (error.code === "invalid_api_key") {
-      return NextResponse.json(
-        { error: "Invalid OpenAI API key. Please check your OPENAI_API_KEY environment variable." },
-        { status: 401 },
-      )
-    }
-
-    if (error.code === "insufficient_quota") {
-      return NextResponse.json({ error: "OpenAI API quota exceeded. Please check your billing." }, { status: 429 })
-    }
-
-    return NextResponse.json(
-      { error: `Failed to generate AI response: ${error.message || "Unknown error"}` },
-      { status: 500 },
-    )
+    return NextResponse.json({ message: text })
+  } catch (error) {
+    console.error("Chat API error:", error)
+    return NextResponse.json({ error: "Failed to generate response" }, { status: 500 })
   }
 }

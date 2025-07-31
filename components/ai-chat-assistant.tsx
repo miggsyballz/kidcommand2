@@ -9,8 +9,57 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Send, Bot, User, Download, Trash2, Music, Search, BarChart3, Plus, Loader2, MessageSquare } from "lucide-react"
+import {
+  Send,
+  Bot,
+  User,
+  Download,
+  Trash2,
+  Music,
+  Search,
+  BarChart3,
+  Plus,
+  Loader2,
+  MessageSquare,
+  Brain,
+} from "lucide-react"
 import { supabase } from "@/lib/supabase"
+
+// Function to search THE BRAIN knowledge base
+const searchBrainKnowledge = (query: string): KnowledgeEntry[] => {
+  const savedEntries = localStorage.getItem("musicmaster-brain-entries")
+  if (!savedEntries) return []
+
+  try {
+    const entries: KnowledgeEntry[] = JSON.parse(savedEntries)
+    const searchLower = query.toLowerCase()
+
+    return entries
+      .filter(
+        (entry) =>
+          entry.command.toLowerCase().includes(searchLower) ||
+          entry.instructions.toLowerCase().includes(searchLower) ||
+          entry.tags.some((tag) => tag.toLowerCase().includes(searchLower)) ||
+          entry.category.toLowerCase().includes(searchLower),
+      )
+      .slice(0, 3) // Limit to top 3 matches
+  } catch (error) {
+    console.error("Error searching brain knowledge:", error)
+    return []
+  }
+}
+
+// Add interface for KnowledgeEntry
+interface KnowledgeEntry {
+  id: string
+  command: string
+  category: string
+  instructions: string
+  example?: string
+  tags: string[]
+  createdAt: string
+  updatedAt: string
+}
 
 interface ChatMessage {
   id: string
@@ -58,6 +107,30 @@ export function AIChatAssistant({ onActionExecuted }: AIChatAssistantProps) {
 
   const processAIRequest = async (userInput: string): Promise<{ content: string; action?: string; data?: any }> => {
     const input = userInput.toLowerCase().trim()
+
+    // First, search THE BRAIN knowledge base
+    const brainMatches = searchBrainKnowledge(userInput)
+    if (brainMatches.length > 0) {
+      const bestMatch = brainMatches[0]
+      let response = `🧠 **From THE BRAIN:** ${bestMatch.instructions}`
+
+      if (bestMatch.example) {
+        response += `\n\n**Example:** ${bestMatch.example}`
+      }
+
+      if (brainMatches.length > 1) {
+        response += `\n\n**Related entries:**`
+        brainMatches.slice(1).forEach((match, index) => {
+          response += `\n• ${match.command}`
+        })
+      }
+
+      return {
+        content: response,
+        action: "brain_knowledge",
+        data: { matches: brainMatches, category: bestMatch.category },
+      }
+    }
 
     try {
       // Create playlist
@@ -391,6 +464,7 @@ export function AIChatAssistant({ onActionExecuted }: AIChatAssistantProps) {
   }
 
   const quickActions = [
+    { label: "Search Brain", action: "How do I", icon: Brain },
     { label: "Show Playlists", action: "Show my playlists", icon: Music },
     { label: "Library Stats", action: "Show library statistics", icon: BarChart3 },
     { label: "Search Music", action: "Search for songs", icon: Search },

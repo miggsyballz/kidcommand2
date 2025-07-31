@@ -1,475 +1,446 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
-import { Upload, FileText, X, AlertCircle, CheckCircle2, Database } from "lucide-react"
+import type React from "react"
+
+import { useState, useRef } from "react"
+import { Upload, FileText, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { supabase } from "@/lib/supabase"
+import { Progress } from "@/components/ui/progress"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { createClient } from "@supabase/supabase-js"
+import * as XLSX from "xlsx"
 
-interface CSVRow {
-  [key: string]: string
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+
+interface ParsedData {
+  headers: string[]
+  rows: any[]
+  fileName: string
 }
 
-interface PlaylistEntry {
-  playlist_id?: string
-  title?: string
-  artist?: string
-  genre?: string
-  year?: number
-  duration?: string
-  bpm?: number
-  album?: string
-}
-
-interface UploadDataContentProps {
-  onPlaylistCreated?: () => void
-}
-
-export function UploadDataContent({ onPlaylistCreated }: UploadDataContentProps) {
-  const [dragActive, setDragActive] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [csvData, setCsvData] = useState<CSVRow[]>([])
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([])
-  const [isUploading, setIsUploading] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-  const [playlists, setPlaylists] = useState<{ id: string; name: string }[]>([])
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>("new")
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    const fetchPlaylists = async () => {
-      const { data, error } = await supabase
-        .from("playlists")
-        .select("id, name")
-        .order("created_at", { ascending: false })
-      if (!error && data) {
-        setPlaylists(data)
-      }
-    }
-
-    fetchPlaylists()
-  }, [])
-
-  const mapRowToPlaylistEntry = (row: CSVRow): PlaylistEntry => {
-    const entry: PlaylistEntry = {}
-
-    // Column mappings using lowercase column names (standard database convention)
-    const columnMappings: { [key: string]: keyof PlaylistEntry } = {
-      // Title mappings
-      title: "title",
-      song: "title",
-      name: "title",
-      track: "title",
-
-      // Artist mappings
-      artist: "artist",
-      performer: "artist",
-      musician: "artist",
-
-      // Genre mappings
-      genre: "genre",
-      category: "genre",
-      style: "genre",
-
-      // Year mappings
-      year: "year",
-      era: "year",
-      decade: "year",
-
-      // Duration mappings
-      duration: "duration",
-      length: "duration",
-      time: "duration",
-      runs: "duration",
-
-      // BPM mappings
-      bpm: "bpm",
-      tempo: "bpm",
-      speed: "bpm",
-
-      // Album mappings
-      album: "album",
-      record: "album",
-      release: "album",
-    }
-
-    for (const key of Object.keys(row)) {
-      const normalizedKey = key.toLowerCase().trim()
-      const field = columnMappings[normalizedKey]
-      if (field) {
-        const value = row[key]?.trim()
-        if (!value) continue
-
-        // Handle numeric fields
-        if (field === "year" || field === "bpm") {
-          const num = Number.parseInt(value)
-          if (!isNaN(num)) {
-            entry[field] = num
-          }
-        } else {
-          // Handle text fields
-          entry[field] = value
-        }
-      }
-    }
-
-    return entry
+// Helper function to convert Excel time fractions to seconds
+function convertExcelTimeToSeconds(value: any): number {
+  if (typeof value === "number" && value < 1 && value > 0) {
+    // Excel time fraction (e.g., 0.04166 = 1 minute)
+    return Math.round(value * 24 * 60 * 60)
   }
 
-  const parseCSV = useCallback((text: string) => {
-    const lines = text.split("\n").filter((line) => line.trim())
-    if (!lines.length) throw new Error("CSV file is empty")
+  if (typeof value === "string") {
+    // Handle mm:ss format
+    const timeMatch = value.match(/^(\d+):(\d+)$/)
+    if (timeMatch) {
+      const minutes = Number.parseInt(timeMatch[1])
+      const seconds = Number.parseInt(timeMatch[2])
+      return minutes * 60 + seconds
+    }
 
-    const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""))
-    const data: CSVRow[] = lines
-      .slice(1)
-      .map((line) => {
-        const values = line.split(",").map((v) => v.trim().replace(/"/g, ""))
-        const row: CSVRow = {}
-        headers.forEach((h, i) => (row[h] = values[i] || ""))
-        return row
-      })
-      .filter((row) => Object.values(row).some((v) => v !== ""))
+    // Handle plain number as string
+    const num = Number.parseFloat(value)
+    if (!isNaN(num)) {
+      return num < 1 && num > 0 ? Math.round(num * 24 * 60 * 60) : num
+    }
+  }
 
-    return { headers, data }
-  }, [])
+  return typeof value === "number" ? value : 0
+}
 
-  const parseXLSX = useCallback(async (file: File) => {
-    const XLSX = await import("xlsx")
-    return new Promise<{ headers: string[]; data: CSVRow[] }>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer)
-          const workbook = XLSX.read(data, { type: "array" })
-          const sheet = workbook.Sheets[workbook.SheetNames[0]]
-          const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][]
-          const headers = json[0].map((h) => String(h).trim())
-          const rows: CSVRow[] = json
-            .slice(1)
-            .map((row) => {
-              const obj: CSVRow = {}
-              headers.forEach((h, i) => (obj[h] = String(row[i] || "").trim()))
-              return obj
-            })
-            .filter((row) => Object.values(row).some((v) => v !== ""))
-          resolve({ headers, data: rows })
-        } catch (err) {
-          reject(err)
-        }
-      }
-      reader.onerror = () => reject(new Error("Failed to read XLSX file"))
-      reader.readAsArrayBuffer(file)
-    })
-  }, [])
+// Helper function to format seconds as mm:ss for display
+function formatSecondsToMinutes(seconds: number): string {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+}
 
-  const handleFile = async (file: File) => {
+// Process row data to handle time columns
+function processRowData(row: any, headers: string[]): any {
+  const processedRow = { ...row }
+
+  headers.forEach((header) => {
+    const value = row[header]
+
+    // Check if this looks like a time/duration column
+    const isTimeColumn =
+      header.toLowerCase().includes("runtime") ||
+      header.toLowerCase().includes("duration") ||
+      header.toLowerCase().includes("time") ||
+      header.toLowerCase().includes("runs")
+
+    if (isTimeColumn && value !== undefined && value !== null && value !== "") {
+      const seconds = convertExcelTimeToSeconds(value)
+      processedRow[header] = seconds
+    }
+  })
+
+  return processedRow
+}
+
+export function UploadDataContent() {
+  const [file, setFile] = useState<File | null>(null)
+  const [parsedData, setParsedData] = useState<ParsedData | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [playlistName, setPlaylistName] = useState("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0]
+    if (!selectedFile) return
+
+    setFile(selectedFile)
     setError(null)
     setSuccess(null)
-    const isCSV = file.name.endsWith(".csv")
-    const isXLSX = file.name.endsWith(".xlsx") || file.name.endsWith(".xls")
+    setParsedData(null)
+    setPlaylistName(selectedFile.name.replace(/\.(csv|xlsx?)$/i, ""))
+  }
 
-    if (!isCSV && !isXLSX) return setError("Only .csv or .xlsx files are supported.")
-    if (file.size > 10 * 1024 * 1024) return setError("File must be under 10MB.")
+  const parseFile = async () => {
+    if (!file) return
 
     try {
-      const { headers, data } = isCSV ? parseCSV(await file.text()) : await parseXLSX(file)
-      setSelectedFile(file)
-      setCsvHeaders(headers)
-      setCsvData(data)
-      setShowPreview(true)
+      setError(null)
+
+      let data: any[][]
+      let headers: string[]
+
+      if (file.name.toLowerCase().endsWith(".csv")) {
+        // Parse CSV
+        const text = await file.text()
+        const lines = text.split("\n").filter((line) => line.trim())
+
+        if (lines.length === 0) {
+          throw new Error("CSV file is empty")
+        }
+
+        // Parse CSV manually to handle quoted fields
+        const parseCSVLine = (line: string): string[] => {
+          const result: string[] = []
+          let current = ""
+          let inQuotes = false
+
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i]
+
+            if (char === '"') {
+              inQuotes = !inQuotes
+            } else if (char === "," && !inQuotes) {
+              result.push(current.trim())
+              current = ""
+            } else {
+              current += char
+            }
+          }
+
+          result.push(current.trim())
+          return result
+        }
+
+        headers = parseCSVLine(lines[0])
+        data = lines.slice(1).map((line) => parseCSVLine(line))
+      } else {
+        // Parse Excel
+        const arrayBuffer = await file.arrayBuffer()
+        const workbook = XLSX.read(arrayBuffer, { type: "array" })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+
+        // Convert to array of arrays
+        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][]
+
+        if (rawData.length === 0) {
+          throw new Error("Excel file is empty")
+        }
+
+        headers = rawData[0].map((h) => String(h || "").trim()).filter((h) => h)
+        data = rawData.slice(1).filter((row) => row.some((cell) => cell !== undefined && cell !== null && cell !== ""))
+      }
+
+      // Convert array data to objects
+      const rows = data
+        .map((row) => {
+          const obj: any = {}
+          headers.forEach((header, index) => {
+            const value = row[index]
+            obj[header] = value !== undefined && value !== null ? String(value).trim() : ""
+          })
+          return obj
+        })
+        .filter((row) => Object.values(row).some((val) => val !== ""))
+
+      setParsedData({
+        headers,
+        rows,
+        fileName: file.name,
+      })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to parse file.")
+      console.error("Parse error:", err)
+      setError(err instanceof Error ? err.message : "Failed to parse file")
     }
   }
 
   const handleUpload = async () => {
-    if (!selectedFile || !csvData.length) {
-      setError("No file or data loaded.")
+    if (!parsedData || !playlistName.trim()) {
+      setError("Please provide a playlist name and parse the file first")
       return
     }
 
-    setIsUploading(true)
-    setError(null)
-    setSuccess(null)
-
     try {
-      let playlistIdToUse = selectedPlaylistId
+      setUploading(true)
+      setUploadProgress(0)
+      setError(null)
 
-      if (!playlistIdToUse || playlistIdToUse === "new") {
-        // Create new playlist
-        const { data: playlist, error: playlistError } = await supabase
-          .from("playlists")
-          .insert({
-            name: selectedFile.name.replace(/\.[^/.]+$/, ""),
-            status: "active",
-            song_count: 0,
-            source_file: selectedFile.name,
-          })
-          .select()
-          .single()
+      // Create playlist first
+      const { data: playlist, error: playlistError } = await supabase
+        .from("playlists")
+        .insert({
+          name: playlistName.trim(),
+          column_structure: JSON.stringify(parsedData.headers),
+          song_count: 0, // Will update after successful insert
+        })
+        .select()
+        .single()
 
-        if (playlistError || !playlist) {
-          throw new Error(playlistError?.message || "Failed to create playlist")
+      if (playlistError) {
+        throw new Error(`Playlist creation failed: ${playlistError.message}`)
+      }
+
+      setUploadProgress(25)
+
+      // Process and insert songs
+      const songsToInsert = parsedData.rows.map((row) => {
+        const processedRow = processRowData(row, parsedData.headers)
+
+        return {
+          playlist_id: playlist.id,
+          source_file: parsedData.fileName,
+          data: processedRow, // ✅ Insert as object, NOT JSON string
         }
+      })
 
-        playlistIdToUse = playlist.id
+      setUploadProgress(50)
+
+      // Insert all songs
+      const { error: songsError } = await supabase.from("playlist_entries").insert(songsToInsert)
+
+      if (songsError) {
+        // Clean up playlist if song insert fails
+        await supabase.from("playlists").delete().eq("id", playlist.id)
+        throw new Error(`Song upload failed: ${songsError.message}`)
       }
 
-      const entriesToInsert = csvData
-        .map((row) => mapRowToPlaylistEntry(row))
-        .filter((entry) => entry.title || entry.artist) // Only include entries with at least a title or artist
-        .map((entry) => ({
-          playlist_id: playlistIdToUse,
-          title: entry.title || null,
-          artist: entry.artist || null,
-          genre: entry.genre || null,
-          year: entry.year || null,
-          duration: entry.duration || null,
-          bpm: entry.bpm || null,
-          album: entry.album || null,
-        }))
-
-      console.log("Inserting entries (sample):", entriesToInsert.slice(0, 2)) // Log first 2 entries for debugging
-
-      const { error: insertError } = await supabase.from("playlist_entries").insert(entriesToInsert)
-
-      if (insertError) {
-        console.error("Insert error details:", insertError)
-        throw new Error(insertError.message)
-      }
+      setUploadProgress(75)
 
       // Update playlist song count
-      await supabase.from("playlists").update({ song_count: entriesToInsert.length }).eq("id", playlistIdToUse)
+      const { error: updateError } = await supabase
+        .from("playlists")
+        .update({ song_count: songsToInsert.length })
+        .eq("id", playlist.id)
 
-      if (onPlaylistCreated) {
-        onPlaylistCreated()
+      if (updateError) {
+        console.warn("Failed to update song count:", updateError.message)
       }
 
-      setSuccess(`Successfully uploaded ${entriesToInsert.length} entries!`)
+      setUploadProgress(100)
+      setSuccess(`Successfully uploaded ${songsToInsert.length} songs to playlist "${playlistName}"`)
 
-      setTimeout(() => {
-        setSelectedFile(null)
-        setCsvData([])
-        setCsvHeaders([])
-        setShowPreview(false)
-        setSelectedPlaylistId("new")
-        setSuccess(null)
-        if (fileInputRef.current) fileInputRef.current.value = ""
-      }, 3000)
+      // Reset form
+      setFile(null)
+      setParsedData(null)
+      setPlaylistName("")
+
+      // Reset file input
+      if (fileInputRef.current) fileInputRef.current.value = ""
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.")
       console.error("Upload error:", err)
+      setError(err instanceof Error ? err.message : "Upload failed")
     } finally {
-      setIsUploading(false)
+      setUploading(false)
+      setUploadProgress(0)
     }
-  }
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Upload Data</h1>
-        <p className="text-muted-foreground">Import your music data from external sources</p>
+        <h1 className="text-3xl font-bold">Upload Music Data</h1>
+        <p className="text-muted-foreground">
+          Import your music library from CSV or Excel files. All columns will be preserved exactly as-is.
+        </p>
       </div>
 
+      {/* File Upload */}
       <Card>
         <CardHeader>
-          <CardTitle>Upload Playlist Data</CardTitle>
-          <CardDescription>CSV or Excel files supported (max 10MB)</CardDescription>
+          <CardTitle>Select File</CardTitle>
+          <CardDescription>Choose a CSV or Excel file containing your music data</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Success Alert */}
-          {success && (
-            <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800 dark:text-green-200">{success}</AlertDescription>
-            </Alert>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-4">
+            <Input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={handleFileSelect}
+              className="flex-1"
+              ref={fileInputRef}
+            />
+            <Button onClick={parseFile} disabled={!file || uploading}>
+              <FileText className="h-4 w-4 mr-2" />
+              Parse File
+            </Button>
+          </div>
+
+          {file && (
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{file.name}</span>
+              <Badge variant="outline">{(file.size / 1024).toFixed(1)} KB</Badge>
+            </div>
           )}
+        </CardContent>
+      </Card>
 
-          {/* Error Alert */}
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+      {/* Playlist Name */}
+      {parsedData && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Playlist Details</CardTitle>
+            <CardDescription>Configure your new playlist</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="playlist-name">Playlist Name</Label>
+              <Input
+                id="playlist-name"
+                value={playlistName}
+                onChange={(e) => setPlaylistName(e.target.value)}
+                placeholder="Enter playlist name..."
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-          {/* Playlist Selector */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Add to Playlist</label>
-            <Select onValueChange={(val) => setSelectedPlaylistId(val)} defaultValue="new">
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Choose a playlist..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="new">➕ Create New Playlist</SelectItem>
-                {playlists.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Info Text */}
-          <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="font-medium mb-2">📋 File Format Requirements:</p>
-            <ul className="list-disc list-inside space-y-1 text-xs">
-              <li>Headers can include: Title, Artist, Genre, Year, Duration, BPM, Album</li>
-              <li>Column names are flexible (e.g., "Song" works for "Title", "Category" works for "Genre")</li>
-              <li>Numeric fields: Year, BPM</li>
-              <li>Maximum file size: 10MB</li>
-              <li>Supported formats: .csv, .xlsx, .xls files</li>
-            </ul>
-          </div>
-
-          <div
-            className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all ${
-              dragActive
-                ? "border-primary bg-primary/5"
-                : selectedFile
-                  ? "border-green-300 bg-green-50 dark:bg-green-950/20"
-                  : "border-muted/30"
-            }`}
-            onDragEnter={(e) => {
-              e.preventDefault()
-              setDragActive(true)
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault()
-              setDragActive(false)
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault()
-              setDragActive(false)
-              if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0])
-            }}
-          >
-            {selectedFile ? (
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-green-600">
-                  <CheckCircle2 className="h-6 w-6" />
-                  <div className="text-left">
-                    <p className="font-medium text-foreground">{selectedFile.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(selectedFile.size)} • {csvData.length} rows
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setSelectedFile(null)
-                    setCsvData([])
-                    setCsvHeaders([])
-                    setShowPreview(false)
-                    setError(null)
-                    setSuccess(null)
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-                <p className="text-sm">
-                  Drop CSV or Excel file here or{" "}
-                  <span
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-primary cursor-pointer hover:underline"
-                  >
-                    browse files
-                  </span>
-                </p>
-              </div>
-            )}
-          </div>
-
-          <Input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,.xlsx,.xls"
-            onChange={(e) => {
-              if (e.target.files?.[0]) handleFile(e.target.files[0])
-            }}
-            className="hidden"
-          />
-
-          {showPreview && csvHeaders.length > 0 && (
+      {/* Preview */}
+      {parsedData && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Data Preview</CardTitle>
+            <CardDescription>
+              Found {parsedData.rows.length} songs with {parsedData.headers.length} columns
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                <h3 className="text-lg font-semibold">Data Preview</h3>
-                <span className="text-sm text-muted-foreground">(First 5 rows of {csvData.length} total)</span>
+              <div className="flex flex-wrap gap-2">
+                {parsedData.headers.map((header) => (
+                  <Badge key={header} variant="secondary">
+                    {header}
+                  </Badge>
+                ))}
               </div>
-              <div className="border rounded-md overflow-auto max-h-[400px]">
+
+              <div className="overflow-auto max-h-96 border rounded">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {csvHeaders.map((h, i) => (
-                        <TableHead key={i}>{h}</TableHead>
+                      {parsedData.headers.map((header) => (
+                        <TableHead key={header} className="whitespace-nowrap">
+                          {header}
+                        </TableHead>
                       ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {csvData.slice(0, 5).map((row, i) => (
-                      <TableRow key={i}>
-                        {csvHeaders.map((h, j) => (
-                          <TableCell key={j} className="max-w-[200px] truncate">
-                            {row[h] || "-"}
-                          </TableCell>
-                        ))}
+                    {parsedData.rows.slice(0, 10).map((row, index) => (
+                      <TableRow key={index}>
+                        {parsedData.headers.map((header) => {
+                          const value = row[header]
+
+                          // Check if this looks like a time column and format for display
+                          const isTimeColumn =
+                            header.toLowerCase().includes("runtime") ||
+                            header.toLowerCase().includes("duration") ||
+                            header.toLowerCase().includes("time") ||
+                            header.toLowerCase().includes("runs")
+
+                          let displayValue = value
+
+                          if (isTimeColumn && value) {
+                            const seconds = convertExcelTimeToSeconds(value)
+                            if (seconds > 0) {
+                              displayValue = formatSecondsToMinutes(seconds)
+                            }
+                          }
+
+                          return (
+                            <TableCell key={header} className="whitespace-nowrap">
+                              {displayValue || "-"}
+                            </TableCell>
+                          )
+                        })}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-            </div>
-          )}
 
-          <div className="flex justify-end">
-            <Button
-              onClick={handleUpload}
-              disabled={!selectedFile || !csvData.length || isUploading}
-              size="lg"
-              className="min-w-40"
-            >
-              {isUploading ? (
-                <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Database className="mr-2 h-4 w-4" />
-                  Upload to Database
-                </>
+              {parsedData.rows.length > 10 && (
+                <p className="text-sm text-muted-foreground">
+                  Showing first 10 rows of {parsedData.rows.length} total rows
+                </p>
               )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Upload Button */}
+      {parsedData && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              <Button onClick={handleUpload} disabled={uploading || !playlistName.trim()} className="w-full" size="lg">
+                {uploading ? (
+                  <>
+                    <Upload className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading... {uploadProgress}%
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload {parsedData.rows.length} Songs
+                  </>
+                )}
+              </Button>
+
+              {uploading && <Progress value={uploadProgress} className="w-full" />}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Status Messages */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {success && (
+        <Alert>
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }
 
-// Default export for backward compatibility
 export default UploadDataContent

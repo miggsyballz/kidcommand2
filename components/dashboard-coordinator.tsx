@@ -1,42 +1,32 @@
 "use client"
-
-import { useState, useEffect } from "react"
-import { DashboardLayout } from "./dashboard-layout"
 import { PlaylistManagerContent } from "./playlist-manager-content"
-import { LibraryContent } from "./LibraryContent"
 import { UploadDataContent } from "./upload-data-content"
-import { AIAssistantHub } from "./ai-assistant-hub"
 import { SettingsContent } from "./settings-content"
 
-export function DashboardCoordinator() {
-  const [activeTab, setActiveTab] = useState("playlists")
+interface DashboardCoordinatorProps {
+  activeView: string
+}
 
-  // Update active tab based on current route
-  useEffect(() => {
-    const path = window.location.pathname
-    if (path.includes("/library")) setActiveTab("library")
-    else if (path.includes("/upload-data")) setActiveTab("upload-data")
-    else if (path.includes("/ai-assistant")) setActiveTab("ai-assistant")
-    else if (path.includes("/settings")) setActiveTab("settings")
-    else setActiveTab("playlists")
-  }, [])
-
+export default function DashboardCoordinator({ activeView }: DashboardCoordinatorProps) {
   const renderContent = () => {
-    switch (activeTab) {
+    switch (activeView) {
       case "playlists":
         return <PlaylistManagerContent />
-      case "library":
-        return <LibraryContent />
       case "upload-data":
         return <UploadDataContent />
-      case "ai-assistant":
-        return <AIAssistantHub />
       case "settings":
         return <SettingsContent />
       default:
-        return <PlaylistManagerContent />
+        return (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-2">Welcome to Kid Command</h2>
+              <p className="text-muted-foreground">Select a section from the sidebar to get started.</p>
+            </div>
+          </div>
+        )
     }
   }
 
-  return <DashboardLayout activeTab={activeTab}>{renderContent()}</DashboardLayout>
+  return <div className="w-full">{renderContent()}</div>
 }

@@ -1,7 +1,6 @@
 "use client"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AIMusicAnalyzer } from "@/components/ai-music-analyzer"
 import { SmartPlaylistGenerator } from "@/components/smart-playlist-generator"
 import { PromptBuilderContent } from "@/components/prompt-builder-content"
 import { AIVoiceAssistant } from "@/components/ai-voice-assistant"
@@ -29,10 +28,9 @@ export default function PromptBuilderPage() {
       </div>
 
       <Tabs defaultValue="chat" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="chat">AI Chat</TabsTrigger>
           <TabsTrigger value="voice">Voice Control</TabsTrigger>
-          <TabsTrigger value="analyzer">AI Analyzer</TabsTrigger>
           <TabsTrigger value="generator">Smart Playlists</TabsTrigger>
           <TabsTrigger value="prompts">Prompt Builder</TabsTrigger>
         </TabsList>
@@ -43,10 +41,6 @@ export default function PromptBuilderPage() {
 
         <TabsContent value="voice" className="space-y-4">
           <AIVoiceAssistant onCommandExecuted={handleVoiceCommand} />
-        </TabsContent>
-
-        <TabsContent value="analyzer" className="space-y-4">
-          <AIMusicAnalyzer />
         </TabsContent>
 
         <TabsContent value="generator" className="space-y-4">

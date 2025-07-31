@@ -1,15 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
+
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
 interface Playlist {
   id: string
   name: string
-  songCount: number
-  dateCreated: string
-  status: "active" | "draft" | "archived"
-  prompt?: string
+  description?: string
+  song_count: number
+  created_at: string
+  updated_at: string
 }
 
 export function usePlaylists() {
@@ -22,98 +24,108 @@ export function usePlaylists() {
       setLoading(true)
       setError(null)
 
-      // Test if table exists first
-      const { data, error } = await supabase.from("playlists").select("*").order("created_at", { ascending: false })
+      const { data, error: supabaseError } = await supabase
+        .from("playlists")
+        .select("*")
+        .order("created_at", { ascending: false })
 
-      if (error) {
-        if (error.message.includes('relation "public.playlists" does not exist')) {
-          setError("Database table not found. Please run the setup scripts in your Supabase SQL Editor.")
-        } else {
-          console.error("Supabase error:", error)
-          setError(`Database error: ${error.message}`)
-        }
-        return
+      if (supabaseError) {
+        throw supabaseError
       }
 
-      // Transform the data to match our component interface
-      const transformedData: Playlist[] =
-        data?.map((playlist) => ({
-          id: playlist.id,
-          name: playlist.name,
-          songCount: playlist.song_count || 0,
-          dateCreated: new Date(playlist.created_at || playlist.date_created).toLocaleDateString(),
-          status: playlist.status || "draft",
-          prompt: playlist.prompt,
-        })) || []
-
-      console.log("Fetched playlists:", transformedData)
-      setPlaylists(transformedData)
+      setPlaylists(data || [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred")
       console.error("Error fetching playlists:", err)
+      setError(err instanceof Error ? err.message : "Failed to fetch playlists")
+      setPlaylists([])
     } finally {
       setLoading(false)
     }
   }
 
-  const createPlaylist = async (name: string, status: "active" | "draft" | "archived" = "draft", prompt?: string) => {
+  const createPlaylist = async (name: string, description?: string) => {
     try {
       const { data, error } = await supabase
         .from("playlists")
         .insert([
           {
             name,
-            status,
-            prompt,
+            description,
             song_count: 0,
           },
         ])
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        throw error
+      }
 
-      // Refresh the playlists
       await fetchPlaylists()
       return data
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create playlist")
+      console.error("Error creating playlist:", err)
+      throw err
+    }
+  }
+
+  const updatePlaylist = async (id: string, updates: Partial<Playlist>) => {
+    try {
+      const { error } = await supabase.from("playlists").update(updates).eq("id", id)
+
+      if (error) {
+        throw error
+      }
+
+      await fetchPlaylists()
+    } catch (err) {
+      console.error("Error updating playlist:", err)
       throw err
     }
   }
 
   const deletePlaylist = async (id: string) => {
     try {
+      // First delete all playlist entries
+      const { error: entriesError } = await supabase.from("playlist_entries").delete().eq("playlist_id", id)
+
+      if (entriesError) {
+        throw entriesError
+      }
+
+      // Then delete the playlist
       const { error } = await supabase.from("playlists").delete().eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        throw error
+      }
 
-      // Refresh the playlists
       await fetchPlaylists()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete playlist")
+      console.error("Error deleting playlist:", err)
       throw err
     }
   }
 
-  const updatePlaylist = async (id: string, updates: Partial<Omit<Playlist, "id">>) => {
+  const deleteMultiplePlaylists = async (ids: string[]) => {
     try {
-      const { error } = await supabase
-        .from("playlists")
-        .update({
-          name: updates.name,
-          status: updates.status,
-          song_count: updates.songCount,
-          prompt: updates.prompt,
-        })
-        .eq("id", id)
+      // First delete all playlist entries for these playlists
+      const { error: entriesError } = await supabase.from("playlist_entries").delete().in("playlist_id", ids)
 
-      if (error) throw error
+      if (entriesError) {
+        throw entriesError
+      }
 
-      // Refresh the playlists
+      // Then delete the playlists
+      const { error } = await supabase.from("playlists").delete().in("id", ids)
+
+      if (error) {
+        throw error
+      }
+
       await fetchPlaylists()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update playlist")
+      console.error("Error deleting playlists:", err)
       throw err
     }
   }
@@ -126,9 +138,10 @@ export function usePlaylists() {
     playlists,
     loading,
     error,
+    fetchPlaylists,
     createPlaylist,
-    deletePlaylist,
     updatePlaylist,
-    refetch: fetchPlaylists,
+    deletePlaylist,
+    deleteMultiplePlaylists,
   }
 }
