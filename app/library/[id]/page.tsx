@@ -4,22 +4,19 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Music, AlertCircle, Calendar, FileText } from "lucide-react"
+import { ArrowLeft, Music, AlertCircle, Edit2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SortableSpreadsheet } from "@/components/sortable-spreadsheet"
+import { getCellDisplayValue } from "@/lib/duration-utils"
 
 interface PlaylistEntry {
   id: string
-  title?: string
-  artist?: string
-  genre?: string
-  year?: number
-  duration?: string
-  bpm?: number
-  album?: string
+  data: Record<string, any>
+  playlist_id: string
+  source_file?: string
+  position: number
   created_at: string
   updated_at?: string
 }
@@ -32,6 +29,7 @@ interface Playlist {
   prompt?: string
   source_file?: string
   date_created?: string
+  column_structure?: string
   created_at: string
   updated_at?: string
 }
@@ -45,6 +43,7 @@ export default function PlaylistDetailPage() {
   const [entries, setEntries] = useState<PlaylistEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [columns, setColumns] = useState<string[]>([])
 
   useEffect(() => {
     const fetchPlaylistData = async () => {
@@ -59,15 +58,71 @@ export default function PlaylistDetailPage() {
         if (playlistError) throw playlistError
         setPlaylist(playlistData)
 
-        // Fetch playlist entries
+        // Fetch playlist entries ordered by position
         const { data: entriesData, error: entriesError } = await supabase
           .from("playlist_entries")
           .select("*")
           .eq("playlist_id", playlistId)
-          .order("created_at", { ascending: true })
+          .order("position", { ascending: true })
 
         if (entriesError) throw entriesError
-        setEntries(entriesData || [])
+
+        // Process entries to ensure data is properly formatted
+        const processedEntries = (entriesData || [])
+          .filter((entry) => {
+            if (!entry.data || typeof entry.data !== "object") {
+              console.warn("Filtering out entry with invalid data:", entry)
+              return false
+            }
+            return true
+          })
+          .map((entry) => {
+            let data = entry.data
+            if (typeof data === "string") {
+              try {
+                data = JSON.parse(data)
+              } catch (e) {
+                console.warn("Failed to parse entry data:", entry.id, e)
+                return null
+              }
+            }
+            return { ...entry, data, position: entry.position || 0 }
+          })
+          .filter(Boolean) as PlaylistEntry[]
+
+        setEntries(processedEntries)
+
+        // Determine columns to display
+        let columnsToUse: string[] = []
+
+        // First, try to use column_structure from playlist
+        if (playlistData.column_structure) {
+          try {
+            const parsedStructure = JSON.parse(playlistData.column_structure)
+            if (Array.isArray(parsedStructure)) {
+              columnsToUse = parsedStructure
+            }
+          } catch (e) {
+            console.warn("Failed to parse column_structure:", e)
+          }
+        }
+
+        // If no column_structure or parsing failed, infer from entry data
+        if (columnsToUse.length === 0) {
+          const allColumns = new Set<string>()
+          processedEntries.forEach((entry) => {
+            if (entry.data && typeof entry.data === "object") {
+              Object.keys(entry.data).forEach((key) => {
+                if (key && key.trim()) {
+                  allColumns.add(key)
+                }
+              })
+            }
+          })
+          columnsToUse = Array.from(allColumns).sort()
+        }
+
+        setColumns(columnsToUse)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load playlist")
       } finally {
@@ -80,17 +135,159 @@ export default function PlaylistDetailPage() {
     }
   }, [playlistId])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800"
-      case "draft":
-        return "bg-yellow-100 text-yellow-800"
-      case "archived":
-        return "bg-gray-100 text-gray-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+  const getEntryValue = (entry: PlaylistEntry, column: string): string => {
+    if (!entry.data || typeof entry.data !== "object") {
+      return "-"
     }
+
+    const value = entry.data[column]
+    return getCellDisplayValue(value, column)
+  }
+
+  const handleEntriesReorder = async (newEntries: PlaylistEntry[]) => {
+    setEntries(newEntries)
+
+    try {
+      const updates = newEntries.map((entry) => ({
+        id: entry.id,
+        position: entry.position,
+        playlist_id: entry.playlist_id, // Ensure playlist_id is included
+      }))
+
+      const { error } = await supabase.from("playlist_entries").upsert(updates, { onConflict: "id" })
+
+      if (error) throw error
+    } catch (err) {
+      console.error("Error updating entry positions:", err)
+      setError("Failed to update entry order")
+    }
+  }
+
+  const handleColumnsReorder = async (newColumns: string[]) => {
+    setColumns(newColumns)
+
+    try {
+      await supabase
+        .from("playlists")
+        .update({ column_structure: JSON.stringify(newColumns) })
+        .eq("id", playlistId)
+    } catch (err) {
+      console.error("Error updating column order:", err)
+      setError("Failed to update column order")
+    }
+  }
+
+  const handleCellEdit = async (entryId: string, column: string, value: any) => {
+    try {
+      const entry = entries.find((e) => e.id === entryId)
+      if (!entry) return
+
+      const updatedData = {
+        ...entry.data,
+        [column]: value,
+      }
+
+      const { error } = await supabase.from("playlist_entries").update({ data: updatedData }).eq("id", entryId)
+
+      if (error) throw error
+
+      // Update local state
+      setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, data: updatedData } : e)))
+    } catch (err) {
+      console.error("Error updating cell:", err)
+      throw err
+    }
+  }
+
+  const handleHeaderEdit = async (oldColumn: string, newColumn: string) => {
+    try {
+      // Update all entries to rename the column
+      const updates = entries.map(async (entry) => {
+        if (!entry.data || typeof entry.data !== "object") return
+
+        const newData = { ...entry.data }
+        if (oldColumn in newData) {
+          newData[newColumn] = newData[oldColumn]
+          delete newData[oldColumn]
+
+          const { error } = await supabase.from("playlist_entries").update({ data: newData }).eq("id", entry.id)
+
+          if (error) throw error
+        }
+      })
+
+      await Promise.all(updates)
+
+      // Update playlist column_structure
+      const newColumns = columns.map((col) => (col === oldColumn ? newColumn : col))
+      await supabase
+        .from("playlists")
+        .update({ column_structure: JSON.stringify(newColumns) })
+        .eq("id", playlistId)
+
+      // Update local state
+      setColumns(newColumns)
+
+      setEntries((prev) =>
+        prev.map((entry) => {
+          if (!entry.data || typeof entry.data !== "object") return entry
+          const newData = { ...entry.data }
+          if (oldColumn in newData) {
+            newData[newColumn] = newData[oldColumn]
+            delete newData[oldColumn]
+          }
+          return { ...entry, data: newData }
+        }),
+      )
+    } catch (err) {
+      console.error("Error updating header:", err)
+      throw err
+    }
+  }
+
+  const handleDeleteEntry = async (entryId: string) => {
+    if (!confirm("Are you sure you want to delete this entry?")) return
+
+    try {
+      const { error } = await supabase.from("playlist_entries").delete().eq("id", entryId)
+
+      if (error) throw error
+
+      setEntries((prev) => prev.filter((e) => e.id !== entryId))
+
+      // Update playlist song count
+      if (playlist) {
+        await supabase
+          .from("playlists")
+          .update({ song_count: playlist.song_count - 1 })
+          .eq("id", playlistId)
+
+        setPlaylist((prev) => (prev ? { ...prev, song_count: prev.song_count - 1 } : null))
+      }
+    } catch (err) {
+      console.error("Error deleting entry:", err)
+      setError("Failed to delete entry")
+    }
+  }
+
+  const handleAddColumn = async () => {
+    const columnName = prompt("Enter new column name:")
+    if (!columnName || !columnName.trim()) return
+
+    const trimmedName = columnName.trim()
+    if (columns.includes(trimmedName)) {
+      alert("Column already exists!")
+      return
+    }
+
+    const newColumns = [...columns, trimmedName].sort()
+    setColumns(newColumns)
+
+    // Update playlist column_structure
+    await supabase
+      .from("playlists")
+      .update({ column_structure: JSON.stringify(newColumns) })
+      .eq("id", playlistId)
   }
 
   if (loading) {
@@ -141,115 +338,56 @@ export default function PlaylistDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">{playlist.name}</h1>
-          <p className="text-muted-foreground">
-            {entries.length} entries • Created{" "}
-            {new Date(playlist.created_at || playlist.date_created || "").toLocaleDateString()}
-          </p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+              <Music className="h-8 w-8" />
+              {playlist.name}
+            </h1>
+            <p className="text-muted-foreground">
+              {entries.length} entries • {columns.length} columns • Created{" "}
+              {new Date(playlist.created_at || playlist.date_created || "").toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => router.push(`/playlists/${playlistId}/edit`)} variant="outline" size="sm">
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit Playlist
+          </Button>
         </div>
       </div>
 
-      {/* Playlist Info */}
+      {/* Playlist Spreadsheet */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Music className="h-5 w-5" />
-            Playlist Details
+            Entries ({entries.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="font-medium flex items-center gap-1">
-                <FileText className="h-4 w-4" />
-                Status:
-              </span>
-              <Badge className={getStatusColor(playlist.status)}>
-                {playlist.status?.charAt(0).toUpperCase() + playlist.status?.slice(1) || "Unknown"}
-              </Badge>
-            </div>
-            <div>
-              <span className="font-medium flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                Source File:
-              </span>
-              <p className="text-muted-foreground">{playlist.source_file || "Unknown"}</p>
-            </div>
-            <div>
-              <span className="font-medium">Total Entries:</span>
-              <p className="text-muted-foreground">{entries.length}</p>
-            </div>
-          </div>
-          {playlist.prompt && (
-            <div className="mt-4">
-              <span className="font-medium">AI Prompt:</span>
-              <p className="text-muted-foreground text-sm mt-1 p-3 bg-muted rounded-lg">{playlist.prompt}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Entries Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Entries</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {entries.length === 0 ? (
-            <div className="text-center py-8">
-              <Music className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No entries found</h3>
-              <p className="text-muted-foreground">This playlist doesn't have any entries yet.</p>
-            </div>
-          ) : (
-            <div className="overflow-auto border rounded-md max-h-[60vh]">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Artist</TableHead>
-                    <TableHead>Genre</TableHead>
-                    <TableHead>Album</TableHead>
-                    <TableHead>Year</TableHead>
-                    <TableHead>Duration</TableHead>
-                    <TableHead>BPM</TableHead>
-                    <TableHead>Added</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entries.map((entry, index) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="text-muted-foreground">{index + 1}</TableCell>
-                      <TableCell className="font-medium">{entry.title || "-"}</TableCell>
-                      <TableCell>{entry.artist || "-"}</TableCell>
-                      <TableCell>
-                        {entry.genre ? (
-                          <Badge variant="secondary" className="text-xs">
-                            {entry.genre}
-                          </Badge>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>{entry.album || "-"}</TableCell>
-                      <TableCell>{entry.year || "-"}</TableCell>
-                      <TableCell>{entry.duration || "-"}</TableCell>
-                      <TableCell>{entry.bpm || "-"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {new Date(entry.created_at).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <SortableSpreadsheet
+            entries={entries.map((entry) => ({
+              id: entry.id,
+              data: entry.data,
+              position: entry.position,
+              created_at: entry.created_at,
+              playlist_id: entry.playlist_id,
+            }))}
+            columns={columns}
+            onEntriesReorder={handleEntriesReorder}
+            onColumnsReorder={handleColumnsReorder}
+            onCellEdit={handleCellEdit}
+            onHeaderEdit={handleHeaderEdit}
+            onDeleteEntry={handleDeleteEntry}
+            onAddColumn={handleAddColumn}
+            getEntryValue={(entry, column) => getEntryValue(entry as any, column)}
+          />
         </CardContent>
       </Card>
     </div>

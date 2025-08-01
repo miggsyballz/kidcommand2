@@ -4,14 +4,22 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Trash2, Edit2, Save, X, Plus, Music, AlertCircle } from "lucide-react"
+import { Music, AlertCircle, Upload, CheckCircle2, FileText, X } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { supabase } from "@/lib/supabase"
+import { useRef } from "react"
+import { SortableSpreadsheet } from "./sortable-spreadsheet"
+import { getCellDisplayValue } from "@/lib/duration-utils"
+import * as XLSX from "xlsx"
 
 interface Song {
   id: number
   data: Record<string, any>
   playlist_id?: number
   source_file?: string
+  position: number
   created_at: string
 }
 
@@ -20,6 +28,7 @@ interface Playlist {
   name: string
   description?: string
   song_count: number
+  column_structure?: string
 }
 
 export function LibraryContent() {
@@ -27,11 +36,19 @@ export function LibraryContent() {
   const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [editingCell, setEditingCell] = useState<{ songId: number; column: string } | null>(null)
-  const [editingHeader, setEditingHeader] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState("")
   const [columns, setColumns] = useState<string[]>([])
   const [selectedPlaylist, setSelectedPlaylist] = useState<number | null>(null)
+
+  // Upload states
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [csvData, setCsvData] = useState<any[]>([])
+  const [headers, setHeaders] = useState<string[]>([])
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>("new")
+  const [deduplicateMode, setDeduplicateMode] = useState<"skip" | "create">("skip")
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchData()
@@ -45,7 +62,7 @@ export function LibraryContent() {
       // Fetch playlists
       const { data: playlistsData, error: playlistsError } = await supabase
         .from("playlists")
-        .select("id, name, description, song_count")
+        .select("id, name, description, song_count, column_structure")
         .order("name")
 
       if (playlistsError) {
@@ -58,8 +75,8 @@ export function LibraryContent() {
       // Fetch songs
       let query = supabase
         .from("playlist_entries")
-        .select("id, data, playlist_id, source_file, created_at")
-        .order("created_at", { ascending: false })
+        .select("id, data, playlist_id, source_file, position, created_at")
+        .order("position", { ascending: true })
 
       if (selectedPlaylist) {
         query = query.eq("playlist_id", selectedPlaylist)
@@ -95,7 +112,7 @@ export function LibraryContent() {
               return null
             }
           }
-          return { ...song, data }
+          return { ...song, data, position: song.position || 0 }
         })
         .filter(Boolean) as Song[]
 
@@ -103,26 +120,143 @@ export function LibraryContent() {
 
       setSongs(processedSongs)
 
-      // Extract unique columns from all songs
-      const allColumns = new Set<string>()
-      processedSongs.forEach((song) => {
-        if (song.data && typeof song.data === "object") {
-          Object.keys(song.data).forEach((key) => {
-            if (key && key.trim()) {
-              allColumns.add(key)
-            }
-          })
-        }
-      })
+      // Extract columns from playlist structure or infer from data
+      let columnsToUse: string[] = []
 
-      const columnArray = Array.from(allColumns).sort()
-      console.log("Extracted columns:", columnArray)
-      setColumns(columnArray)
+      if (selectedPlaylist) {
+        const playlist = playlistsData?.find((p) => p.id === selectedPlaylist)
+        if (playlist?.column_structure) {
+          try {
+            const parsedStructure = JSON.parse(playlist.column_structure)
+            if (Array.isArray(parsedStructure)) {
+              columnsToUse = parsedStructure
+            }
+          } catch (e) {
+            console.warn("Failed to parse column_structure:", e)
+          }
+        }
+      }
+
+      // If no column structure, infer from data
+      if (columnsToUse.length === 0) {
+        const allColumns = new Set<string>()
+        processedSongs.forEach((song) => {
+          if (song.data && typeof song.data === "object") {
+            Object.keys(song.data).forEach((key) => {
+              if (key && key.trim()) {
+                allColumns.add(key)
+              }
+            })
+          }
+        })
+        columnsToUse = Array.from(allColumns).sort()
+      }
+
+      console.log("Extracted columns:", columnsToUse)
+      setColumns(columnsToUse)
     } catch (err) {
       console.error("Error in fetchData:", err)
       setError(err instanceof Error ? err.message : "An error occurred while fetching data")
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Upload functions
+  const handleFile = async (file: File) => {
+    const isCSV = file.name.endsWith(".csv")
+    const isXLSX = file.name.endsWith(".xlsx") || file.name.endsWith(".xls")
+    if (!isCSV && !isXLSX) return setUploadError("Only CSV or Excel files are supported.")
+    setSelectedFile(file)
+    setUploadError(null)
+    try {
+      const data = await file.arrayBuffer()
+      const workbook = XLSX.read(data, { type: "array" })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      const json = XLSX.utils.sheet_to_json(sheet, { defval: "" })
+      const headerRow = XLSX.utils.sheet_to_json(sheet, { header: 1 })[0] as string[]
+      setHeaders(headerRow)
+      setCsvData(json as any[])
+    } catch (e) {
+      setUploadError("Failed to parse file.")
+    }
+  }
+
+  const checkForDuplicates = async (entries: any[]) => {
+    const duplicates = []
+    for (const entry of entries) {
+      if (!entry.Title && !entry.Artist) continue
+      const { data, error } = await supabase
+        .from("playlist_entries")
+        .select("id")
+        .eq("Title", entry.Title)
+        .eq("Artist", entry.Artist)
+        .limit(1)
+      if (!error && data && data.length > 0) duplicates.push(entry)
+    }
+    return duplicates
+  }
+
+  const handleUpload = async () => {
+    if (!selectedFile || !csvData.length) return setUploadError("No file or data loaded.")
+
+    setIsUploading(true)
+    setUploadError(null)
+    setUploadSuccess(null)
+
+    try {
+      let playlistId = selectedPlaylistId
+      if (!playlistId || playlistId === "new") {
+        const { data: playlist, error } = await supabase
+          .from("playlists")
+          .insert({
+            name: selectedFile.name.replace(/\.[^/.]+$/, ""),
+            status: "active",
+            source_file: selectedFile.name,
+            song_count: 0,
+            column_structure: JSON.stringify(headers),
+          })
+          .select()
+          .single()
+        if (error || !playlist) throw new Error(error?.message || "Could not create playlist")
+        playlistId = playlist.id
+      }
+
+      let entries = csvData.map((row, index) => ({
+        playlist_id: playlistId,
+        source_file: selectedFile.name,
+        position: index + 1,
+        data: row,
+      }))
+
+      if (deduplicateMode === "skip") {
+        const duplicates = await checkForDuplicates(csvData)
+        const duplicateSet = new Set(duplicates.map((d) => `${d.Title}-${d.Artist}`))
+        entries = entries.filter((e) => !duplicateSet.has(`${e.data.Title}-${e.data.Artist}`))
+      }
+
+      const { error: insertError } = await supabase.from("playlist_entries").insert(entries)
+      if (insertError) throw new Error(insertError.message)
+
+      await supabase.from("playlists").update({ song_count: entries.length }).eq("id", playlistId)
+
+      setUploadSuccess(`Uploaded ${entries.length} songs successfully.`)
+
+      // Refresh the data
+      await fetchData()
+
+      setTimeout(() => {
+        setSelectedFile(null)
+        setCsvData([])
+        setHeaders([])
+        fileInputRef.current?.value && (fileInputRef.current.value = "")
+        setUploadSuccess(null)
+      }, 3000)
+    } catch (err) {
+      console.error(err)
+      setUploadError(err instanceof Error ? err.message : "Upload failed.")
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -132,77 +266,84 @@ export function LibraryContent() {
     }
 
     const value = song.data[column]
-
-    if (value === null || value === undefined || value === "") {
-      return "-"
-    }
-
-    // Handle time formatting for Runtime columns
-    if (column.toLowerCase().includes("runtime") || column.toLowerCase().includes("duration")) {
-      if (typeof value === "number") {
-        // Convert decimal to mm:ss format
-        const totalSeconds = Math.round(value * 24 * 60 * 60)
-        const minutes = Math.floor(totalSeconds / 60)
-        const seconds = totalSeconds % 60
-        return `${minutes}:${seconds.toString().padStart(2, "0")}`
-      }
-    }
-
-    return String(value)
+    return getCellDisplayValue(value, column)
   }
 
-  const handleCellEdit = (songId: number, column: string, currentValue: string) => {
-    setEditingCell({ songId, column })
-    setEditValue(currentValue === "-" ? "" : currentValue)
-  }
-
-  const handleHeaderEdit = (column: string) => {
-    setEditingHeader(column)
-    setEditValue(column)
-  }
-
-  const saveCellEdit = async () => {
-    if (!editingCell) return
+  const handleEntriesReorder = async (newEntries: Song[]) => {
+    setSongs(newEntries)
 
     try {
-      const song = songs.find((s) => s.id === editingCell.songId)
+      // Only update entries that have a playlist_id
+      const validEntries = newEntries.filter((entry) => entry.playlist_id)
+
+      if (validEntries.length === 0) {
+        console.warn("No entries with playlist_id found for reordering")
+        return
+      }
+
+      const updates = validEntries.map((entry) => ({
+        id: entry.id,
+        position: entry.position,
+        playlist_id: entry.playlist_id, // Ensure playlist_id is included
+      }))
+
+      const { error } = await supabase.from("playlist_entries").upsert(updates, { onConflict: "id" })
+
+      if (error) throw error
+    } catch (err) {
+      console.error("Error updating entry positions:", err)
+      setError("Failed to update entry order")
+    }
+  }
+
+  const handleColumnsReorder = async (newColumns: string[]) => {
+    setColumns(newColumns)
+
+    try {
+      if (selectedPlaylist) {
+        await supabase
+          .from("playlists")
+          .update({ column_structure: JSON.stringify(newColumns) })
+          .eq("id", selectedPlaylist)
+      }
+    } catch (err) {
+      console.error("Error updating column order:", err)
+      setError("Failed to update column order")
+    }
+  }
+
+  const handleCellEdit = async (entryId: string, column: string, value: any) => {
+    try {
+      const song = songs.find((s) => s.id === Number(entryId))
       if (!song) return
 
       const updatedData = {
         ...song.data,
-        [editingCell.column]: editValue || null,
+        [column]: value,
       }
 
-      const { error } = await supabase
-        .from("playlist_entries")
-        .update({ data: updatedData })
-        .eq("id", editingCell.songId)
+      const { error } = await supabase.from("playlist_entries").update({ data: updatedData }).eq("id", entryId)
 
       if (error) throw error
 
       // Update local state
-      setSongs((prev) => prev.map((s) => (s.id === editingCell.songId ? { ...s, data: updatedData } : s)))
-
-      setEditingCell(null)
-      setEditValue("")
+      setSongs((prev) => prev.map((s) => (s.id === Number(entryId) ? { ...s, data: updatedData } : s)))
     } catch (err) {
       console.error("Error updating cell:", err)
-      setError("Failed to update cell")
+      throw err
     }
   }
 
-  const saveHeaderEdit = async () => {
-    if (!editingHeader || !editValue.trim()) return
-
+  const handleHeaderEdit = async (oldColumn: string, newColumn: string) => {
     try {
       // Update all songs to rename the column
       const updates = songs.map(async (song) => {
         if (!song.data || typeof song.data !== "object") return
 
         const newData = { ...song.data }
-        if (editingHeader in newData) {
-          newData[editValue] = newData[editingHeader]
-          delete newData[editingHeader]
+        if (oldColumn in newData) {
+          newData[newColumn] = newData[oldColumn]
+          delete newData[oldColumn]
 
           const { error } = await supabase.from("playlist_entries").update({ data: newData }).eq("id", song.id)
 
@@ -213,50 +354,50 @@ export function LibraryContent() {
       await Promise.all(updates)
 
       // Update local state
-      setColumns((prev) => prev.map((col) => (col === editingHeader ? editValue : col)))
+      setColumns((prev) => prev.map((col) => (col === oldColumn ? newColumn : col)))
 
       setSongs((prev) =>
         prev.map((song) => {
           if (!song.data || typeof song.data !== "object") return song
           const newData = { ...song.data }
-          if (editingHeader in newData) {
-            newData[editValue] = newData[editingHeader]
-            delete newData[editingHeader]
+          if (oldColumn in newData) {
+            newData[newColumn] = newData[oldColumn]
+            delete newData[oldColumn]
           }
           return { ...song, data: newData }
         }),
       )
 
-      setEditingHeader(null)
-      setEditValue("")
+      // Update column structure if playlist is selected
+      if (selectedPlaylist) {
+        const newColumns = columns.map((col) => (col === oldColumn ? newColumn : col))
+        await supabase
+          .from("playlists")
+          .update({ column_structure: JSON.stringify(newColumns) })
+          .eq("id", selectedPlaylist)
+      }
     } catch (err) {
       console.error("Error updating header:", err)
-      setError("Failed to update column header")
+      throw err
     }
   }
 
-  const cancelEdit = () => {
-    setEditingCell(null)
-    setEditingHeader(null)
-    setEditValue("")
-  }
-
-  const deleteSong = async (songId: number) => {
+  const handleDeleteEntry = async (entryId: string) => {
     if (!confirm("Are you sure you want to delete this song?")) return
 
     try {
-      const { error } = await supabase.from("playlist_entries").delete().eq("id", songId)
+      const { error } = await supabase.from("playlist_entries").delete().eq("id", entryId)
 
       if (error) throw error
 
-      setSongs((prev) => prev.filter((s) => s.id !== songId))
+      setSongs((prev) => prev.filter((s) => s.id !== Number(entryId)))
     } catch (err) {
       console.error("Error deleting song:", err)
       setError("Failed to delete song")
     }
   }
 
-  const addColumn = async () => {
+  const handleAddColumn = async () => {
     const columnName = prompt("Enter new column name:")
     if (!columnName || !columnName.trim()) return
 
@@ -266,7 +407,16 @@ export function LibraryContent() {
       return
     }
 
-    setColumns((prev) => [...prev, trimmedName].sort())
+    const newColumns = [...columns, trimmedName].sort()
+    setColumns(newColumns)
+
+    // Update column structure if playlist is selected
+    if (selectedPlaylist) {
+      await supabase
+        .from("playlists")
+        .update({ column_structure: JSON.stringify(newColumns) })
+        .eq("id", selectedPlaylist)
+    }
   }
 
   if (loading) {
@@ -322,15 +472,164 @@ export function LibraryContent() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={addColumn} variant="outline" size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Column
-          </Button>
           <Button onClick={fetchData} variant="outline" size="sm">
             Refresh
           </Button>
         </div>
       </div>
+
+      {/* Upload Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Upload Music Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {uploadSuccess && (
+            <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800 dark:text-green-200">{uploadSuccess}</AlertDescription>
+            </Alert>
+          )}
+
+          {uploadError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{uploadError}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Add to Playlist</label>
+              <Select onValueChange={(val) => setSelectedPlaylistId(val)} defaultValue="new">
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a playlist..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">
+                    <div className="flex items-center gap-2">
+                      <Music className="h-4 w-4" />
+                      Create New Playlist
+                    </div>
+                  </SelectItem>
+                  {playlists.map((p) => (
+                    <SelectItem key={p.id} value={p.id.toString()}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Duplicate Handling</label>
+              <Select onValueChange={(val: "skip" | "create") => setDeduplicateMode(val)} defaultValue="skip">
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">Skip Duplicates</SelectItem>
+                  <SelectItem value="create">Create Anyway</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="relative border-2 border-dashed rounded-lg p-6 text-center">
+            {selectedFile ? (
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-left text-green-600">
+                  <p className="font-medium">{selectedFile.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {csvData.length} rows • {(selectedFile.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setSelectedFile(null)
+                    setCsvData([])
+                    setHeaders([])
+                    setUploadError(null)
+                    setUploadSuccess(null)
+                    fileInputRef.current?.value && (fileInputRef.current.value = "")
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Upload className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
+                <p className="text-sm">
+                  Drop CSV or Excel file here or{" "}
+                  <span onClick={() => fileInputRef.current?.click()} className="text-primary cursor-pointer underline">
+                    browse
+                  </span>
+                </p>
+              </>
+            )}
+            <Input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+              className="hidden"
+            />
+          </div>
+
+          {csvData.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <FileText className="h-4 w-4" />
+                <h4 className="font-medium text-sm">Data Preview (First 5 Rows)</h4>
+              </div>
+              <div className="border rounded-md overflow-auto max-h-[300px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {headers.map((h, i) => (
+                        <TableHead key={i}>{h}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {csvData.slice(0, 5).map((row, i) => (
+                      <TableRow key={i}>
+                        {headers.map((h, j) => (
+                          <TableCell key={j} className="max-w-[200px] truncate">
+                            {getCellDisplayValue(row[h], h)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <Button onClick={handleUpload} disabled={isUploading || !csvData.length} size="lg" className="min-w-40">
+              {isUploading ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload to Library
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Playlist Filter */}
       <div className="flex flex-wrap gap-2">
@@ -353,30 +652,7 @@ export function LibraryContent() {
         ))}
       </div>
 
-      {/* Debug Info (Development Only) */}
-      {process.env.NODE_ENV === "development" && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardHeader>
-            <CardTitle className="text-blue-600 text-sm">Debug Info</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs">
-            <p>
-              <strong>Songs loaded:</strong> {songs.length}
-            </p>
-            <p>
-              <strong>Columns detected:</strong> {columns.join(", ")}
-            </p>
-            <p>
-              <strong>Sample data structure:</strong>
-            </p>
-            <pre className="bg-blue-100 p-2 rounded mt-2 overflow-auto max-h-32">
-              {JSON.stringify(songs[0]?.data || {}, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Library Table */}
+      {/* Library Spreadsheet */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -385,110 +661,23 @@ export function LibraryContent() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {songs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Music className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No songs found in your library.</p>
-              <p className="text-sm">Upload some data to get started!</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2 font-medium">#</th>
-                    {columns.map((column) => (
-                      <th key={column} className="text-left p-2 font-medium min-w-[120px]">
-                        {editingHeader === column ? (
-                          <div className="flex items-center gap-1">
-                            <Input
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="h-6 text-xs"
-                              onKeyPress={(e) => e.key === "Enter" && saveHeaderEdit()}
-                            />
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveHeaderEdit}>
-                              <Save className="h-3 w-3" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={cancelEdit}>
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 group">
-                            <span>{column}</span>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-4 w-4 opacity-0 group-hover:opacity-100"
-                              onClick={() => handleHeaderEdit(column)}
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
-                      </th>
-                    ))}
-                    <th className="text-left p-2 font-medium">Created</th>
-                    <th className="text-left p-2 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {songs.map((song, index) => (
-                    <tr key={song.id} className="border-b hover:bg-muted/50">
-                      <td className="p-2 text-sm text-muted-foreground">{index + 1}</td>
-                      {columns.map((column) => {
-                        const value = getSongValue(song, column)
-                        const isEditing = editingCell?.songId === song.id && editingCell?.column === column
-
-                        return (
-                          <td key={column} className="p-2">
-                            {isEditing ? (
-                              <div className="flex items-center gap-1">
-                                <Input
-                                  value={editValue}
-                                  onChange={(e) => setEditValue(e.target.value)}
-                                  className="h-6 text-xs"
-                                  onKeyPress={(e) => e.key === "Enter" && saveCellEdit()}
-                                />
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveCellEdit}>
-                                  <Save className="h-3 w-3" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={cancelEdit}>
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div
-                                className="text-sm cursor-pointer hover:bg-muted/50 p-1 rounded group"
-                                onClick={() => handleCellEdit(song.id, column, value)}
-                              >
-                                <span className={value === "-" ? "text-muted-foreground" : ""}>{value}</span>
-                                <Edit2 className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 inline" />
-                              </div>
-                            )}
-                          </td>
-                        )
-                      })}
-                      <td className="p-2 text-xs text-muted-foreground">
-                        {new Date(song.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="p-2">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 text-red-500 hover:text-red-700"
-                          onClick={() => deleteSong(song.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <SortableSpreadsheet
+            entries={songs.map((song) => ({
+              id: song.id.toString(),
+              data: song.data,
+              position: song.position,
+              created_at: song.created_at,
+              playlist_id: song.playlist_id,
+            }))}
+            columns={columns}
+            onEntriesReorder={handleEntriesReorder}
+            onColumnsReorder={handleColumnsReorder}
+            onCellEdit={handleCellEdit}
+            onHeaderEdit={handleHeaderEdit}
+            onDeleteEntry={handleDeleteEntry}
+            onAddColumn={handleAddColumn}
+            getEntryValue={(entry, column) => getSongValue(entry as any, column)}
+          />
         </CardContent>
       </Card>
     </div>

@@ -8,8 +8,8 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Kid Command - Radio Station Management",
-  description: "Professional radio station playlist and music management system",
+  title: "Kid Command - Music Dashboard",
+  description: "Radio station music management dashboard",
     generator: 'v0.dev'
 }
 
@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <SidebarProvider>{children}</SidebarProvider>

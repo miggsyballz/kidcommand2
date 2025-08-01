@@ -5,41 +5,39 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-export function NavMain({
-  items,
-  activeView,
-  onNavClick,
-}: {
-  items: {
-    title: string
-    key: string
-    icon?: LucideIcon
-  }[]
+interface NavItem {
+  title: string
+  key: string
+  icon?: LucideIcon
+}
+
+interface NavMainProps {
+  items: NavItem[]
   activeView: string
   onNavClick: (key: string) => void
-}) {
+}
+
+export function NavMain({ items, activeView, onNavClick }: NavMainProps) {
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Platform</SidebarGroupLabel>
       <SidebarMenu>
-        {items.map((item) => {
-          const isActive = activeView === item.key
-          return (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton
-                onClick={() => onNavClick(item.key)}
-                className={`cursor-pointer ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}`}
-              >
-                {item.icon && <item.icon className="h-4 w-4" />}
-                <span>{item.title}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )
-        })}
+        {items.map((item) => (
+          <SidebarMenuItem key={item.key}>
+            <SidebarMenuButton
+              tooltip={item.title}
+              isActive={activeView === item.key}
+              onClick={() => onNavClick(item.key)}
+            >
+              {item.icon && <item.icon />}
+              <span>{item.title}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))}
       </SidebarMenu>
     </SidebarGroup>
   )

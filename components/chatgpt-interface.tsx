@@ -3,456 +3,366 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Send, Bot, User, Minimize2, Sparkles, Loader2, AlertCircle, Settings, RefreshCw } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  MessageCircle,
+  Send,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  User,
+  Bot,
+  Calendar,
+  Clock,
+  Loader2,
+  Sparkles,
+} from "lucide-react"
 
-interface ChatMessage {
+interface Message {
   id: string
-  type: "user" | "assistant"
+  role: "user" | "assistant"
   content: string
   timestamp: Date
-  isGenerating?: boolean
+  schedule?: any
 }
 
-export function ChatGPTInterface() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      type: "assistant",
-      content:
-        "Hi Mig! I'm your AI music assistant powered by GPT-4. I can help you create playlists, analyze your beats, generate music ideas, and manage your MaxxBeats.com business. What would you like to work on today?",
-      timestamp: new Date(),
-    },
-  ])
-  const [inputValue, setInputValue] = useState("")
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [isMinimized, setIsMinimized] = useState(false)
-  const [apiError, setApiError] = useState<string | null>(null)
-  const [isConnected, setIsConnected] = useState<boolean | null>(null)
-  const [connectionDetails, setConnectionDetails] = useState<string>("")
+interface GeneratedSchedule {
+  title: string
+  totalDuration: string
+  totalDurationSeconds: number
+  items: Array<{
+    id: string
+    title: string
+    artist: string
+    duration: string
+    startTime: string
+    endTime: string
+    type: "song" | "interstitial" | "break"
+    notes?: string
+  }>
+}
 
-  const scrollAreaRef = useRef<HTMLDivElement>(null)
+const QUICK_PROMPTS = [
+  "How do I import a CSV file into MusicMaster?",
+  "What's the best way to set up daypart rotations?",
+  "Build a 3-hour morning show with rock music",
+  "How do I create a balanced playlist rotation?",
+  "Generate a 2-hour jazz evening show",
+  "What are the key MusicMaster scheduling rules?",
+  "Create a workout playlist with high-energy songs",
+  "How do I handle music library maintenance?",
+]
+
+export function ChatGPTInterface() {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight
-    }
+    scrollToBottom()
   }, [messages])
 
-  useEffect(() => {
-    // Check API connection on mount
-    checkAPIConnection()
-  }, [])
+  const sendMessage = async (messageText?: string) => {
+    const text = messageText || input.trim()
+    if (!text || isLoading) return
 
-  const checkAPIConnection = async () => {
-    try {
-      setConnectionDetails("Testing connection...")
-
-      const response = await fetch("/api/test-connection", {
-        method: "GET",
-      })
-
-      const data = await response.json()
-
-      if (data.connected) {
-        setIsConnected(true)
-        setApiError(null)
-        setConnectionDetails("Connected to OpenAI GPT-4")
-      } else {
-        setIsConnected(false)
-        setApiError(data.error || "Connection failed")
-        setConnectionDetails(`Connection failed: ${data.error}`)
-      }
-    } catch (error: any) {
-      setIsConnected(false)
-      setApiError("Unable to connect to AI service")
-      setConnectionDetails(`Network error: ${error.message}`)
-    }
-  }
-
-  const processAIRequest = async (userInput: string): Promise<string> => {
-    try {
-      // Check for specific database operations first
-      const lowerInput = userInput.toLowerCase()
-
-      // Handle playlist creation directly
-      if (lowerInput.includes("create playlist") || lowerInput.includes("make playlist")) {
-        const playlistName = extractPlaylistName(userInput)
-        if (playlistName) {
-          const { data, error } = await supabase
-            .from("playlists")
-            .insert({
-              name: playlistName,
-              status: "active",
-              song_count: 0,
-              source_file: "AI Chat",
-            })
-            .select()
-            .single()
-
-          if (!error && data) {
-            // Still call OpenAI for a personalized response
-            const response = await fetch("/api/chat", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                message: `I just created a playlist called "${playlistName}" for the user. Give a brief confirmation and suggest what they could do next with it.`,
-                context: { action: "playlist_created", playlistName },
-              }),
-            })
-
-            if (response.ok) {
-              const { response: aiResponse } = await response.json()
-              return aiResponse
-            } else {
-              const errorData = await response.json()
-              throw new Error(errorData.error || "API request failed")
-            }
-          } else {
-            return `❌ Couldn't create "${playlistName}" - it might already exist. Try a different name or check your existing playlists.`
-          }
-        }
-      }
-
-      // For all other requests, use OpenAI API
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userInput,
-          context: {
-            userType: "music_producer",
-            website: "MaxxBeats.com",
-            timestamp: new Date().toISOString(),
-          },
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `API request failed: ${response.status}`)
-      }
-
-      const { response: aiResponse } = await response.json()
-      return aiResponse
-    } catch (error: any) {
-      console.error("Error processing AI request:", error)
-      setApiError(error.message)
-
-      // Fallback to basic responses if API fails
-      return getFallbackResponse(userInput, error.message)
-    }
-  }
-
-  const getFallbackResponse = (input: string, errorMessage?: string): string => {
-    const lowerInput = input.toLowerCase()
-
-    if (lowerInput.includes("help")) {
-      return `🤖 **AI Service Issue**
-
-${errorMessage ? `Error: ${errorMessage}` : "I'm having trouble connecting to the AI service right now."}
-
-I can still help with basic tasks:
-• Create playlists by saying "Create playlist called [name]"
-• View your library in the Library tab
-• Manage playlists in the Playlists tab
-• Upload music data in the Upload Data tab
-
-**Troubleshooting:**
-1. Check that OPENAI_API_KEY is set in your environment variables
-2. Verify your OpenAI API key is valid and has credits
-3. Try refreshing the connection using the settings button
-
-Please fix the API configuration for full AI assistance.`
-    }
-
-    return `🤖 **Connection Issue**
-
-${errorMessage ? `Error: ${errorMessage}` : "I'm currently unable to provide AI-powered responses due to a connection issue."}
-
-**Quick fixes:**
-1. Check your OPENAI_API_KEY environment variable
-2. Verify your API key has sufficient credits
-3. Click the refresh button to test connection again
-
-In the meantime, you can still use the app's core features like playlist management and music library organization.`
-  }
-
-  const extractPlaylistName = (input: string): string | null => {
-    const patterns = [
-      /create playlist (?:called |named )?["']?([^"']+)["']?/i,
-      /make (?:a )?playlist (?:called |named )?["']?([^"']+)["']?/i,
-      /new playlist (?:called |named )?["']?([^"']+)["']?/i,
-    ]
-
-    for (const pattern of patterns) {
-      const match = input.match(pattern)
-      if (match && match[1]) {
-        return match[1].trim()
-      }
-    }
-    return null
-  }
-
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isProcessing) return
-
-    const userMessage: ChatMessage = {
+    const userMessage: Message = {
       id: Date.now().toString(),
-      type: "user",
-      content: inputValue.trim(),
+      role: "user",
+      content: text,
       timestamp: new Date(),
     }
 
     setMessages((prev) => [...prev, userMessage])
-    setInputValue("")
-    setIsProcessing(true)
-    setApiError(null)
-
-    // Add loading message
-    const loadingMessage: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      type: "assistant",
-      content: "",
-      timestamp: new Date(),
-      isGenerating: true,
-    }
-    setMessages((prev) => [...prev, loadingMessage])
+    setInput("")
+    setIsLoading(true)
 
     try {
-      const response = await processAIRequest(userMessage.content)
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      })
 
-      // Remove loading message and add real response
-      setMessages((prev) => {
-        const filtered = prev.filter((msg) => !msg.isGenerating)
-        return [
-          ...filtered,
-          {
-            id: (Date.now() + 2).toString(),
-            type: "assistant",
-            content: response,
-            timestamp: new Date(),
-          },
-        ]
-      })
-    } catch (error: any) {
-      setMessages((prev) => {
-        const filtered = prev.filter((msg) => !msg.isGenerating)
-        return [
-          ...filtered,
-          {
-            id: (Date.now() + 2).toString(),
-            type: "assistant",
-            content: `❌ Sorry, I encountered an error: ${error.message}. Please check your API configuration or try again.`,
-            timestamp: new Date(),
-          },
-        ]
-      })
+      if (!response.ok) {
+        throw new Error("Failed to get response")
+      }
+
+      const data = await response.json()
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.message,
+        timestamp: new Date(),
+        schedule: data.schedule,
+      }
+
+      setMessages((prev) => [...prev, assistantMessage])
+
+      // Auto-speak response if enabled
+      if (isSpeaking && data.message) {
+        speak(data.message)
+      }
+    } catch (error) {
+      console.error("Chat error:", error)
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Sorry, I encountered an error. Please try again.",
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, errorMessage])
     } finally {
-      setIsProcessing(false)
-      inputRef.current?.focus()
+      setIsLoading(false)
     }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      handleSendMessage()
+      sendMessage()
     }
   }
 
-  const quickPrompts = [
-    "Create a trap beats playlist",
-    "Analyze my music library",
-    "Help me price my beats",
-    "Show my playlists",
-    "Music production workflow tips",
-    "Plugin recommendations",
-  ]
+  const startListening = () => {
+    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+      alert("Speech recognition not supported in this browser")
+      return
+    }
 
-  if (isMinimized) {
-    return (
-      <div className="fixed top-4 right-4 z-50">
-        <Button
-          onClick={() => setIsMinimized(false)}
-          className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg"
-        >
-          <Sparkles className="mr-2 h-4 w-4" />
-          AI Assistant
-          {isConnected === false && <AlertCircle className="ml-2 h-3 w-3 text-yellow-300" />}
-        </Button>
-      </div>
-    )
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    const recognition = new SpeechRecognition()
+
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = "en-US"
+
+    recognition.onstart = () => {
+      setIsListening(true)
+    }
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript
+      setInput(transcript)
+      setIsListening(false)
+    }
+
+    recognition.onerror = () => {
+      setIsListening(false)
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+    }
+
+    recognition.start()
+  }
+
+  const speak = (text: string) => {
+    if ("speechSynthesis" in window) {
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = 0.9
+      utterance.pitch = 1
+      utterance.volume = 0.8
+      speechSynthesis.speak(utterance)
+    }
+  }
+
+  const toggleSpeaking = () => {
+    setIsSpeaking(!isSpeaking)
+    if (isSpeaking) {
+      speechSynthesis.cancel()
+    }
+  }
+
+  const clearChat = () => {
+    setMessages([])
   }
 
   return (
-    <Card className="border-b-0 rounded-b-none bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20">
-      <div className="p-4">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg">
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold flex items-center gap-2">
-                AI Music Assistant
-                {isConnected === true && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
-                  >
-                    GPT-4 Connected
-                  </Badge>
-                )}
-                {isConnected === false && (
-                  <Badge variant="destructive" className="text-xs">
-                    API Disconnected
-                  </Badge>
-                )}
-                {isConnected === null && (
-                  <Badge variant="outline" className="text-xs">
-                    Testing...
-                  </Badge>
-                )}
-              </h3>
-              <p className="text-xs text-muted-foreground">{connectionDetails || "Checking connection status..."}</p>
+    <div className="flex flex-col h-[600px] max-w-4xl mx-auto">
+      {/* Header */}
+      <Card className="rounded-b-none">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              Kid Command AI Assistant
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleSpeaking}
+                className={isSpeaking ? "bg-green-50 border-green-200" : ""}
+              >
+                {isSpeaking ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              </Button>
+              <Button variant="outline" size="sm" onClick={clearChat}>
+                Clear
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-xs">
-              {messages.filter((m) => m.type === "user").length} messages
-            </Badge>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={checkAPIConnection}
-              disabled={isProcessing}
-              title="Test API Connection"
-            >
-              <RefreshCw className={`h-4 w-4 ${isConnected === null ? "animate-spin" : ""}`} />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setIsMinimized(true)}>
-              <Minimize2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        </CardHeader>
+      </Card>
 
-        {/* API Error Alert */}
-        {apiError && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>API Error:</strong> {apiError}
-              <br />
-              <span className="text-xs mt-1 block">
-                Check your OPENAI_API_KEY environment variable and ensure your API key has sufficient credits.
-              </span>
-            </AlertDescription>
-          </Alert>
-        )}
+      {/* Messages */}
+      <Card className="flex-1 rounded-none border-t-0">
+        <CardContent className="p-0 h-full">
+          <ScrollArea className="h-full p-4">
+            <div className="space-y-4">
+              {messages.length === 0 && (
+                <div className="text-center py-8">
+                  <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">Welcome to Kid Command AI</h3>
+                  <p className="text-muted-foreground mb-4">
+                    I'm here to help with radio programming, MusicMaster software, and show scheduling.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-w-2xl mx-auto">
+                    {QUICK_PROMPTS.map((prompt, index) => (
+                      <Button
+                        key={index}
+                        variant="outline"
+                        size="sm"
+                        className="justify-start text-left h-auto py-2 px-3 bg-transparent"
+                        onClick={() => sendMessage(prompt)}
+                      >
+                        <span className="text-xs">{prompt}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-        {/* Connection Help */}
-        {isConnected === false && (
-          <Alert className="mb-4">
-            <Settings className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Setup Required:</strong> Add your OpenAI API key to environment variables:
-              <br />
-              <code className="text-xs bg-muted px-1 py-0.5 rounded mt-1 inline-block">
-                OPENAI_API_KEY=sk-your-key-here
-              </code>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Quick Actions */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {quickPrompts.map((prompt, index) => (
-            <Button
-              key={index}
-              variant="outline"
-              size="sm"
-              onClick={() => setInputValue(prompt)}
-              className="text-xs h-7"
-              disabled={isProcessing}
-            >
-              {prompt}
-            </Button>
-          ))}
-        </div>
-
-        {/* Chat Messages */}
-        <ScrollArea className="h-[300px] border rounded-lg bg-background/50 p-3 mb-4" ref={scrollAreaRef}>
-          <div className="space-y-3">
-            {messages.map((message) => (
-              <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
+              {messages.map((message) => (
                 <div
-                  className={`max-w-[85%] rounded-lg p-3 ${
-                    message.type === "user" ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white" : "bg-muted"
-                  }`}
+                  key={message.id}
+                  className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  <div className="flex items-start gap-2">
-                    {message.type === "assistant" && <Bot className="h-4 w-4 mt-0.5 flex-shrink-0" />}
-                    {message.type === "user" && <User className="h-4 w-4 mt-0.5 flex-shrink-0" />}
-                    <div className="flex-1">
-                      {message.isGenerating ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-sm">{isConnected ? "GPT-4 is thinking..." : "Processing..."}</span>
+                  <div
+                    className={`flex gap-3 max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        message.role === "user" ? "bg-blue-500 text-white" : "bg-purple-500 text-white"
+                      }`}
+                    >
+                      {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                    </div>
+                    <div
+                      className={`rounded-lg p-3 ${message.role === "user" ? "bg-blue-500 text-white" : "bg-muted"}`}
+                    >
+                      <div className="whitespace-pre-wrap text-sm">{message.content}</div>
+
+                      {/* Schedule Display */}
+                      {message.schedule && (
+                        <div className="mt-3 p-3 bg-background rounded border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Calendar className="h-4 w-4" />
+                            <span className="font-medium">{message.schedule.title}</span>
+                            <Badge variant="secondary">
+                              <Clock className="h-3 w-3 mr-1" />
+                              {message.schedule.totalDuration}
+                            </Badge>
+                          </div>
+
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {message.schedule.items?.slice(0, 5).map((item: any, index: number) => (
+                              <div key={index} className="flex items-center gap-2 text-xs">
+                                <span className="font-mono text-muted-foreground">{item.startTime}</span>
+                                <Badge variant={item.type === "song" ? "default" : "outline"} className="text-xs">
+                                  {item.type}
+                                </Badge>
+                                <span className="truncate">
+                                  {item.title} {item.artist && `- ${item.artist}`}
+                                </span>
+                              </div>
+                            ))}
+                            {message.schedule.items?.length > 5 && (
+                              <div className="text-xs text-muted-foreground">
+                                +{message.schedule.items.length - 5} more items...
+                              </div>
+                            )}
+                          </div>
+
+                          <Button size="sm" variant="outline" className="mt-2 w-full bg-transparent">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            View Full Schedule
+                          </Button>
                         </div>
-                      ) : (
-                        <div className="text-sm whitespace-pre-wrap">{message.content}</div>
                       )}
-                      <div className="text-xs opacity-70 mt-1">{message.timestamp.toLocaleTimeString()}</div>
+
+                      <div className="text-xs opacity-70 mt-2">{message.timestamp.toLocaleTimeString()}</div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+
+              {isLoading && (
+                <div className="flex gap-3 justify-start">
+                  <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center flex-shrink-0">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                  <div className="bg-muted rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm">Thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div ref={messagesEndRef} />
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* Input */}
+      <Card className="rounded-t-none border-t-0">
+        <CardContent className="p-4">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask about radio programming, MusicMaster, or request a show schedule..."
+                disabled={isLoading}
+                className="pr-12"
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                className={`absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 ${
+                  isListening ? "bg-red-100 text-red-600" : ""
+                }`}
+                onClick={startListening}
+                disabled={isLoading}
+              >
+                {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
+            </div>
+            <Button onClick={() => sendMessage()} disabled={isLoading || !input.trim()}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
           </div>
-        </ScrollArea>
-
-        {/* Input */}
-        <div className="flex gap-2">
-          <Input
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder={
-              isConnected
-                ? "Ask about beats, playlists, production tips, or MaxxBeats.com..."
-                : "API disconnected - check your OpenAI key..."
-            }
-            disabled={isProcessing}
-            className="flex-1"
-          />
-          <Button
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isProcessing}
-            className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-          >
-            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
-        </div>
-
-        {/* Connection Status */}
-        <div className="mt-2 text-center">
-          <p className="text-xs text-muted-foreground">
-            {isConnected === true && "🟢 Connected to OpenAI GPT-4"}
-            {isConnected === false && "🔴 API connection failed - check your OPENAI_API_KEY"}
-            {isConnected === null && "🟡 Testing connection..."}
-          </p>
-        </div>
-      </div>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

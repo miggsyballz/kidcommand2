@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { GalleryVerticalEnd, Terminal, Music, Library, Upload, Settings, MessageCircle, X, Bot } from "lucide-react"
+import { GalleryVerticalEnd, Terminal, Music, Library, Settings, MessageCircle, X, Bot } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,20 +14,14 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar"
 import { NavMain } from "@/components/nav-main"
-import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
+import { UserActions } from "@/components/user-actions"
 import { AIAssistantChat } from "@/components/AIAssistantChat"
 import { PlaylistManagerContent } from "@/components/PlaylistManagerContent"
 import { LibraryContent } from "@/components/LibraryContent"
-import { UploadDataContent } from "@/components/upload-data-content"
 import { SettingsContent } from "@/components/settings-content"
 
 const data = {
-  user: {
-    name: "Kid Kelly",
-    email: "kid.kelly@radiostation.com",
-    avatar: "/kidcommand_logo.png",
-  },
   teams: [
     {
       name: "Kid Command",
@@ -50,11 +44,6 @@ const data = {
       title: "Library",
       key: "library",
       icon: Library,
-    },
-    {
-      title: "Upload Data",
-      key: "upload-data",
-      icon: Upload,
     },
     {
       title: "Settings",
@@ -80,8 +69,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         return <PlaylistManagerContent />
       case "library":
         return <LibraryContent />
-      case "upload-data":
-        return <UploadDataContent />
       case "settings":
         return <SettingsContent />
       default:
@@ -99,7 +86,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <NavMain items={data.navMain} activeView={activeView} onNavClick={handleNavClick} />
         </SidebarContent>
         <SidebarFooter>
-          <NavUser user={data.user} />
+          <UserActions />
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
