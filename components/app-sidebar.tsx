@@ -66,7 +66,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
             <span className="truncate font-semibold">Music Matrix</span>
-            <span className="truncate text-xs">Enterprise</span>
+            <span className="truncate text-xs">Scheduling Interface</span>
           </div>
         </div>
       </SidebarHeader>
