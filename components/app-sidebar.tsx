@@ -77,7 +77,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div className="flex items-center justify-between p-2">
           <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8">
-            <LogOut className="h-4 w-4" />
+            
             <span className="sr-only">Logout</span>
           </Button>
         </div>
