@@ -1,88 +1,86 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Music, Radio, Brain, Calendar } from "lucide-react"
+import { Music, Radio, Brain, Zap } from "lucide-react"
 
 export default function SplashPage() {
   const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleEnter = () => {
-    // Set auth and redirect directly without login modal
-    localStorage.setItem("isAuthenticated", "true")
-    localStorage.setItem("userEmail", "mig@maxxbeats.com")
+  const handleEnter = async () => {
+    setIsLoading(true)
+    // Simulate auth check/setup
+    await new Promise((resolve) => setTimeout(resolve, 500))
     router.push("/dashboard")
   }
 
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4 overflow-hidden">
-      <div className="max-w-4xl w-full text-center space-y-8">
-        {/* Main Heading */}
+    <div className="h-screen w-screen overflow-hidden flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="text-center space-y-8 max-w-2xl mx-auto px-6">
+        {/* Logo/Brand */}
         <div className="space-y-4">
-          <h1 className="text-6xl md:text-8xl font-bold text-white mb-4">Music Matrix</h1>
-          <h2 className="text-2xl md:text-3xl text-blue-200 font-light">AI Driven Radio Scheduling System</h2>
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="p-4 bg-primary/10 rounded-full">
+              <Music className="h-12 w-12 text-primary" />
+            </div>
+          </div>
+          <h1 className="text-6xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Music Matrix
+          </h1>
+          <p className="text-xl text-muted-foreground max-w-lg mx-auto">
+            Your intelligent music production and radio programming companion
+          </p>
         </div>
 
-        {/* Feature Cards */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
-            <CardHeader>
-              <Music className="h-8 w-8 text-blue-300 mx-auto" />
-              <CardTitle className="text-white">Smart Library</CardTitle>
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-12">
+          <Card className="border-0 shadow-lg bg-white/50 dark:bg-gray-800/50 backdrop-blur">
+            <CardHeader className="pb-3">
+              <Radio className="h-8 w-8 text-blue-600 mx-auto" />
+              <CardTitle className="text-lg">Smart Library</CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-blue-200">AI-powered music organization and management</CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
-            <CardHeader>
-              <Calendar className="h-8 w-8 text-purple-300 mx-auto" />
-              <CardTitle className="text-white">Auto Scheduling</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-blue-200">
-                Intelligent playlist generation and scheduling
+              <CardDescription>
+                Organize and manage your music collection with intelligent categorization
               </CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
-            <CardHeader>
-              <Radio className="h-8 w-8 text-green-300 mx-auto" />
-              <CardTitle className="text-white">Radio Ready</CardTitle>
+          <Card className="border-0 shadow-lg bg-white/50 dark:bg-gray-800/50 backdrop-blur">
+            <CardHeader className="pb-3">
+              <Brain className="h-8 w-8 text-purple-600 mx-auto" />
+              <CardTitle className="text-lg">AI Assistant</CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-blue-200">Professional radio station management tools</CardDescription>
+              <CardDescription>Get intelligent recommendations and automate your workflow</CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
-            <CardHeader>
-              <Brain className="h-8 w-8 text-yellow-300 mx-auto" />
-              <CardTitle className="text-white">AI Assistant</CardTitle>
+          <Card className="border-0 shadow-lg bg-white/50 dark:bg-gray-800/50 backdrop-blur">
+            <CardHeader className="pb-3">
+              <Zap className="h-8 w-8 text-green-600 mx-auto" />
+              <CardTitle className="text-lg">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-blue-200">Voice-powered music discovery and control</CardDescription>
+              <CardDescription>Streamline your production process with powerful automation tools</CardDescription>
             </CardContent>
           </Card>
         </div>
 
-        {/* Enter Button */}
-        <div className="mt-12">
+        {/* CTA */}
+        <div className="space-y-4">
           <Button
             size="lg"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+            className="text-lg px-8 py-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
             onClick={handleEnter}
+            disabled={isLoading}
           >
-            Enter Music Matrix
+            {isLoading ? "Loading..." : "Enter Music Matrix"}
           </Button>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-16 text-blue-300 text-sm">
-          <p>Powered by MaxxBeats.com | Professional Music Production Services</p>
+          <p className="text-sm text-muted-foreground">Ready to revolutionize your music workflow?</p>
         </div>
       </div>
     </div>
