@@ -1,12 +1,13 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Mic, MicOff, Send, Volume2, VolumeX } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import SpeechRecognition from "speech-recognition"
 
 interface Message {
@@ -21,41 +22,49 @@ export function AIChatAssistant() {
     {
       id: "1",
       content:
-        "Hello! I'm your AI music assistant. I can help you with playlist management, music recommendations, and scheduling. What would you like to do today?",
+        "Hello! I'm your AI assistant for Music Matrix. I can help you with playlist management, music scheduling, and answer questions about your music library. How can I assist you today?",
       role: "assistant",
       timestamp: new Date(),
     },
   ])
   const [input, setInput] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const synthRef = useRef<SpeechSynthesis | null>(null)
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      synthRef.current = window.speechSynthesis
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight
+    }
+  }, [messages])
 
-      if (SpeechRecognition) {
-        recognitionRef.current = new SpeechRecognition()
-        recognitionRef.current.continuous = false
-        recognitionRef.current.interimResults = false
-        recognitionRef.current.lang = "en-US"
+  useEffect(() => {
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition()
+      recognitionRef.current.continuous = false
+      recognitionRef.current.interimResults = false
+      recognitionRef.current.lang = "en-US"
 
-        recognitionRef.current.onresult = (event) => {
-          const transcript = event.results[0][0].transcript
-          setInput(transcript)
-          setIsListening(false)
-        }
+      recognitionRef.current.onresult = (event) => {
+        const transcript = event.results[0][0].transcript
+        setInput(transcript)
+        setIsListening(false)
+      }
 
-        recognitionRef.current.onerror = () => {
-          setIsListening(false)
-        }
+      recognitionRef.current.onerror = () => {
+        setIsListening(false)
+      }
 
-        recognitionRef.current.onend = () => {
-          setIsListening(false)
-        }
+      recognitionRef.current.onend = () => {
+        setIsListening(false)
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
       }
     }
   }, [])
@@ -65,7 +74,7 @@ export function AIChatAssistant() {
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: input,
+      content: input.trim(),
       role: "user",
       timestamp: new Date(),
     }
@@ -81,8 +90,8 @@ export function AIChatAssistant() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: input,
-          context: "music_assistant",
+          message: input.trim(),
+          history: messages,
         }),
       })
 
@@ -94,19 +103,19 @@ export function AIChatAssistant() {
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.response || "I'm sorry, I couldn't process that request.",
+        content: data.message,
         role: "assistant",
         timestamp: new Date(),
       }
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      // Speak the response if speech synthesis is available
-      if (synthRef.current && !isSpeaking) {
-        const utterance = new SpeechSynthesisUtterance(assistantMessage.content)
+      // Text-to-speech for assistant response
+      if ("speechSynthesis" in window) {
+        const utterance = new SpeechSynthesisUtterance(data.message)
         utterance.onstart = () => setIsSpeaking(true)
         utterance.onend = () => setIsSpeaking(false)
-        synthRef.current.speak(utterance)
+        speechSynthesis.speak(utterance)
       }
     } catch (error) {
       console.error("Error sending message:", error)
@@ -119,6 +128,13 @@ export function AIChatAssistant() {
       setMessages((prev) => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
     }
   }
 
@@ -135,46 +151,34 @@ export function AIChatAssistant() {
   }
 
   const toggleSpeaking = () => {
-    if (!synthRef.current) return
-
-    if (isSpeaking) {
-      synthRef.current.cancel()
-      setIsSpeaking(false)
+    if ("speechSynthesis" in window) {
+      if (isSpeaking) {
+        speechSynthesis.cancel()
+        setIsSpeaking(false)
+      }
     }
   }
 
   return (
-    <div className="flex flex-col h-full max-w-4xl mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">AI Music Assistant</h1>
-        <p className="text-muted-foreground">
-          Chat with your AI assistant for music recommendations, playlist management, and more.
-        </p>
-        <div className="flex gap-2 mt-4">
-          <Badge variant="secondary">Voice Recognition</Badge>
-          <Badge variant="secondary">Text-to-Speech</Badge>
-          <Badge variant="secondary">Music Knowledge</Badge>
-        </div>
-      </div>
-
+    <div className="flex h-full flex-col">
       <Card className="flex-1 flex flex-col">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            Chat Assistant
+            AI Chat Assistant
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={toggleSpeaking} disabled={!isSpeaking}>
+              <Button variant="outline" size="icon" onClick={toggleSpeaking} disabled={!isSpeaking}>
                 {isSpeaking ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </Button>
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col p-0">
-          <ScrollArea className="flex-1 p-4">
+          <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
             <div className="space-y-4">
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
-                    className={`max-w-[80%] rounded-lg p-3 ${
+                    className={`max-w-[80%] rounded-lg px-4 py-2 ${
                       message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
                     }`}
                   >
@@ -185,28 +189,29 @@ export function AIChatAssistant() {
               ))}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg p-3">
+                  <div className="bg-muted rounded-lg px-4 py-2">
                     <p className="text-sm">Thinking...</p>
                   </div>
                 </div>
               )}
             </div>
           </ScrollArea>
-          <div className="p-4 border-t">
+          <div className="border-t p-4">
             <div className="flex gap-2">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask me about music, playlists, or scheduling..."
-                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                onKeyPress={handleKeyPress}
+                placeholder="Type your message..."
                 disabled={isLoading}
+                className="flex-1"
               />
               <Button
                 variant="outline"
                 size="icon"
                 onClick={toggleListening}
                 disabled={isLoading}
-                className={isListening ? "bg-red-100 border-red-300" : ""}
+                className={isListening ? "bg-red-100 text-red-600" : ""}
               >
                 {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
@@ -214,7 +219,6 @@ export function AIChatAssistant() {
                 <Send className="h-4 w-4" />
               </Button>
             </div>
-            {isListening && <p className="text-sm text-muted-foreground mt-2">Listening... Speak now</p>}
           </div>
         </CardContent>
       </Card>

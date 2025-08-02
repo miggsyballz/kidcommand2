@@ -21,7 +21,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, title = "Dashboard" }: DashboardLayoutProps) {
   return (
-    <SidebarProvider defaultOpen={true}>
+    <SidebarProvider defaultOpen={false}>
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
@@ -39,7 +39,7 @@ export function DashboardLayout({ children, title = "Dashboard" }: DashboardLayo
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <div className="flex flex-1 flex-col">{children}</div>
+        <div className="flex flex-1 flex-col p-4">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   )
