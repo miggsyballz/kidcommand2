@@ -2,7 +2,7 @@
 
 import type * as React from "react"
 import { useRouter } from "next/navigation"
-import { Bot, Music, Library, Settings, Home, LogOut } from "lucide-react"
+import { AudioWaveform, BookOpen, Bot, GalleryVerticalEnd, Settings2, SquareTerminal, LogOut } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
@@ -15,17 +15,17 @@ const data = {
     {
       title: "Dashboard",
       url: "/dashboard",
-      icon: Home,
+      icon: SquareTerminal,
     },
     {
       title: "Library",
       url: "/library",
-      icon: Library,
+      icon: BookOpen,
     },
     {
       title: "Playlists",
       url: "/playlists",
-      icon: Music,
+      icon: AudioWaveform,
     },
     {
       title: "AI Assistant",
@@ -35,7 +35,7 @@ const data = {
     {
       title: "Settings",
       url: "/settings",
-      icon: Settings,
+      icon: Settings2,
     },
   ],
 }
@@ -54,7 +54,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-4 py-2">
-          <Music className="h-6 w-6" />
+          <GalleryVerticalEnd className="h-6 w-6" />
           <span className="font-semibold">Music Matrix</span>
         </div>
       </SidebarHeader>
@@ -62,9 +62,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex items-center justify-between p-2">
+        <div className="flex items-center justify-center gap-2 p-2">
           <ThemeToggle />
-          <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
+          <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
