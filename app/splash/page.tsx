@@ -3,9 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -16,120 +14,122 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Music } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Music, Radio, Brain, Calendar } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 export default function SplashPage() {
-  const [loginOpen, setLoginOpen] = useState(false)
+  const [isLoginOpen, setIsLoginOpen] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const router = useRouter()
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    // For now, no credentials needed - just set auth and redirect
-    localStorage.setItem("isAuthenticated", "true")
-    localStorage.setItem("userEmail", email || "user@musicmatrix.com")
-    router.push("/")
+    // For now, no credentials needed - just redirect to dashboard
+    setIsLoginOpen(false)
+    router.push("/dashboard")
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-      <div className="max-w-4xl w-full text-center">
-        {/* Logo and Branding */}
-        <div className="mb-8">
-          <div className="flex justify-center mb-6">
-            <div className="bg-white/10 backdrop-blur-sm rounded-full p-6">
-              <Music className="h-16 w-16 text-white" />
-            </div>
-          </div>
-
-          <h1 className="text-6xl font-bold text-white mb-4 tracking-tight">Music Matrix</h1>
-
-          <h2 className="text-2xl text-blue-200 mb-8 font-light">AI Driven Radio Scheduling System</h2>
-
-          <p className="text-lg text-white/80 max-w-2xl mx-auto mb-12 leading-relaxed">
-            Revolutionize your radio programming with intelligent playlist management, AI-powered scheduling, and
-            comprehensive music library organization.
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4">
+      <div className="max-w-4xl w-full text-center space-y-8">
+        {/* Main Heading */}
+        <div className="space-y-4">
+          <h1 className="text-6xl md:text-8xl font-bold text-white mb-4">Music Matrix</h1>
+          <h2 className="text-2xl md:text-3xl text-blue-200 font-light">AI Driven Radio Scheduling System</h2>
         </div>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-3 gap-6 mb-12">
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20 text-white">
+        {/* Feature Cards */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
+          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
             <CardHeader>
-              <CardTitle className="text-white">Smart Scheduling</CardTitle>
+              <Music className="h-8 w-8 text-blue-300 mx-auto" />
+              <CardTitle className="text-white">Smart Library</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-white/80">AI-powered playlist generation and radio show scheduling</p>
+              <CardDescription className="text-blue-200">AI-powered music organization and management</CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20 text-white">
+          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
             <CardHeader>
-              <CardTitle className="text-white">Music Library</CardTitle>
+              <Calendar className="h-8 w-8 text-purple-300 mx-auto" />
+              <CardTitle className="text-white">Auto Scheduling</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-white/80">Comprehensive music management and organization system</p>
+              <CardDescription className="text-blue-200">
+                Intelligent playlist generation and scheduling
+              </CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20 text-white">
+          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
             <CardHeader>
+              <Radio className="h-8 w-8 text-green-300 mx-auto" />
+              <CardTitle className="text-white">Radio Ready</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-blue-200">Professional radio station management tools</CardDescription>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
+            <CardHeader>
+              <Brain className="h-8 w-8 text-yellow-300 mx-auto" />
               <CardTitle className="text-white">AI Assistant</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-white/80">Voice-enabled AI assistant for music production guidance</p>
+              <CardDescription className="text-blue-200">Voice-powered music discovery and control</CardDescription>
             </CardContent>
           </Card>
         </div>
 
         {/* Login Button */}
-        <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="bg-white text-purple-900 hover:bg-white/90 px-8 py-3 text-lg font-semibold">
-              Get Started
-            </Button>
-          </DialogTrigger>
-
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Welcome to Music Matrix</DialogTitle>
-              <DialogDescription>Enter your credentials to access the system</DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-
-              <Button type="submit" className="w-full">
-                Sign In
+        <div className="mt-12">
+          <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
+            <DialogTrigger asChild>
+              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg">
+                Enter Music Matrix
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Welcome to Music Matrix</DialogTitle>
+                <DialogDescription>Sign in to access your AI-powered radio scheduling system</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+                <Button type="submit" className="w-full">
+                  Sign In
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
 
         {/* Footer */}
-        <div className="mt-16 text-white/60 text-sm">
-          <p>Powered by MaxxBeats.com</p>
+        <div className="mt-16 text-blue-300 text-sm">
+          <p>Powered by MaxxBeats.com | Professional Music Production Services</p>
         </div>
       </div>
     </div>

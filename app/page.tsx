@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Music, Upload, Library, Settings, TrendingUp, Clock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import { redirect } from "next/navigation"
 
 interface DashboardStats {
   totalPlaylists: number
@@ -39,7 +40,7 @@ export default function DashboardPage() {
         setIsAuthenticated(true)
         loadDashboardData()
       } else {
-        router.push("/login")
+        redirect("/login")
       }
       setIsLoading(false)
     }
