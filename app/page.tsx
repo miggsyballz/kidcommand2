@@ -45,9 +45,6 @@ export default function DashboardPage() {
       setIsLoading(false)
     }
 
-    // Redirect to splash screen on first load
-    router.push("/splash")
-
     checkAuth()
   }, [router])
 
