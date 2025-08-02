@@ -1,20 +1,20 @@
-import { AudioWaveform, Bot, Command, Settings2, SquareTerminal } from "lucide-react"
+import { Home, Music, Library, Bot, Settings } from "lucide-react"
 
 export const navigationItems = [
   {
     title: "Dashboard",
     url: "/dashboard",
-    icon: SquareTerminal,
+    icon: Home,
   },
   {
     title: "Library",
     url: "/library",
-    icon: AudioWaveform,
+    icon: Library,
   },
   {
     title: "Playlists",
     url: "/playlists",
-    icon: Command,
+    icon: Music,
   },
   {
     title: "AI Assistant",
@@ -24,6 +24,6 @@ export const navigationItems = [
   {
     title: "Settings",
     url: "/settings",
-    icon: Settings2,
+    icon: Settings,
   },
 ]
