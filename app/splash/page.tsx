@@ -1,35 +1,17 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Music, Radio, Brain, Calendar } from "lucide-react"
 
 export default function SplashPage() {
-  const [isLoginOpen, setIsLoginOpen] = useState(false)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const router = useRouter()
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    // For now, no credentials needed - just set auth and redirect
+  const handleEnter = () => {
+    // Set auth and redirect directly without login modal
     localStorage.setItem("isAuthenticated", "true")
-    localStorage.setItem("userEmail", email || "mig@maxxbeats.com")
-    setIsLoginOpen(false)
+    localStorage.setItem("userEmail", "mig@maxxbeats.com")
     router.push("/dashboard")
   }
 
@@ -87,46 +69,15 @@ export default function SplashPage() {
           </Card>
         </div>
 
-        {/* Login Button */}
+        {/* Enter Button */}
         <div className="mt-12">
-          <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
-            <DialogTrigger asChild>
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg">
-                Enter Music Matrix
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Welcome to Music Matrix</DialogTitle>
-                <DialogDescription>Sign in to access your AI-powered radio scheduling system</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  Sign In
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button
+            size="lg"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+            onClick={handleEnter}
+          >
+            Enter Music Matrix
+          </Button>
         </div>
 
         {/* Footer */}
