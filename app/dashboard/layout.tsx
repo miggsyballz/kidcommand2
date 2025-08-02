@@ -1,9 +1,10 @@
-import type { ReactNode } from "react"
+import type React from "react"
+import { DashboardLayout } from "@/components/dashboard-layout"
 
-interface DashboardLayoutProps {
-  children: ReactNode
-}
-
-export default function DashboardLayoutWrapper({ children }: DashboardLayoutProps) {
-  return <>{children}</>
+export default function Layout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return <DashboardLayout>{children}</DashboardLayout>
 }

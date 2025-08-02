@@ -2,28 +2,15 @@
 
 import type * as React from "react"
 import { useRouter } from "next/navigation"
-import { Bot, Frame, GalleryVerticalEnd, Map, PieChart, Music, Library, Settings, Home, LogOut } from "lucide-react"
+import { Bot, Music, Library, Settings, Home, LogOut } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
-import { TeamSwitcher } from "@/components/team-switcher"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 // This is sample data.
 const data = {
-  user: {
-    name: "Mig",
-    email: "mig@maxxbeats.com",
-    avatar: "/placeholder-user.jpg",
-  },
-  teams: [
-    {
-      name: "Music Matrix",
-      logo: GalleryVerticalEnd,
-      plan: "Enterprise",
-    },
-  ],
   navMain: [
     {
       title: "Dashboard",
@@ -51,23 +38,6 @@ const data = {
       icon: Settings,
     },
   ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
-    },
-  ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -83,7 +53,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <div className="flex items-center gap-2 px-4 py-2">
+          <Music className="h-6 w-6" />
+          <span className="font-semibold">Music Matrix</span>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
