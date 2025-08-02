@@ -1,29 +1,80 @@
-import { Radio, Music, Library, Upload, Settings } from "lucide-react"
+import { AudioWaveform, Bot, Command, Settings2, SquareTerminal } from "lucide-react"
 
 export const navigationItems = [
   {
-    key: "dashboard",
     title: "Dashboard",
-    icon: <Radio className="h-4 w-4" />,
+    url: "/dashboard",
+    icon: SquareTerminal,
+    isActive: true,
+    items: [
+      {
+        title: "Overview",
+        url: "/dashboard",
+      },
+      {
+        title: "Analytics",
+        url: "/dashboard/analytics",
+      },
+    ],
   },
   {
-    key: "playlists",
-    title: "Playlists",
-    icon: <Music className="h-4 w-4" />,
-  },
-  {
-    key: "library",
     title: "Library",
-    icon: <Library className="h-4 w-4" />,
+    url: "/library",
+    icon: AudioWaveform,
+    items: [
+      {
+        title: "Browse Music",
+        url: "/library",
+      },
+      {
+        title: "Upload Songs",
+        url: "/library/upload",
+      },
+    ],
   },
   {
-    key: "upload-data",
-    title: "Upload Data",
-    icon: <Upload className="h-4 w-4" />,
+    title: "Playlists",
+    url: "/playlists",
+    icon: Command,
+    items: [
+      {
+        title: "All Playlists",
+        url: "/playlists",
+      },
+      {
+        title: "Create New",
+        url: "/playlists/create",
+      },
+    ],
   },
   {
-    key: "settings",
+    title: "AI Assistant",
+    url: "/ai-assistant",
+    icon: Bot,
+    items: [
+      {
+        title: "Chat Assistant",
+        url: "/ai-assistant",
+      },
+      {
+        title: "Voice Commands",
+        url: "/ai-assistant/voice",
+      },
+    ],
+  },
+  {
     title: "Settings",
-    icon: <Settings className="h-4 w-4" />,
+    url: "/settings",
+    icon: Settings2,
+    items: [
+      {
+        title: "General",
+        url: "/settings",
+      },
+      {
+        title: "Account",
+        url: "/settings/account",
+      },
+    ],
   },
 ]
