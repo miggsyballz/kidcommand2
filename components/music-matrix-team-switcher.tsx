@@ -23,7 +23,7 @@ const teams = [
   {
     name: "MaxxBeats Studio",
     logo: "🎧",
-    plan: "Enterprise",
+    plan: "Free",
   },
 ]
 
