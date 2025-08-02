@@ -1,37 +1,15 @@
-"use client"
+import type React from "react"
+import { Sidebar } from "antd"
 
-import type * as React from "react"
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
-
-interface Team {
-  name: string
-  logo: React.ElementType
-  plan: string
-}
-
-interface TeamSwitcherProps {
-  teams: Team[]
-}
-
-export function TeamSwitcher({ teams }: TeamSwitcherProps) {
-  const activeTeam = teams[0]
-
+const TeamSwitcher: React.FC = () => {
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          size="lg"
-          className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-        >
-          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <activeTeam.logo className="size-4" />
-          </div>
-          <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-semibold">{activeTeam.name}</span>
-            <span className="truncate text-xs">{activeTeam.plan}</span>
-          </div>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    </SidebarMenu>
+    <Sidebar>
+      <div>
+        <h1>Music Matrix</h1>
+        {/* rest of code here */}
+      </div>
+    </Sidebar>
   )
 }
+
+export default TeamSwitcher

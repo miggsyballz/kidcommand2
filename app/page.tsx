@@ -117,7 +117,7 @@ export default function DashboardPage() {
         {/* Welcome Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Welcome back, Kid Kelly!</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Welcome back, Mig!</h1>
             <p className="text-muted-foreground">Here's what's happening with your music library today.</p>
           </div>
         </div>
