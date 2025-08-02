@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,7 +17,6 @@ import {
 } from "@/components/ui/dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Music, Radio, Brain, Calendar } from "lucide-react"
-import { useRouter } from "next/navigation"
 
 export default function SplashPage() {
   const [isLoginOpen, setIsLoginOpen] = useState(false)
@@ -26,7 +26,9 @@ export default function SplashPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    // For now, no credentials needed - just redirect to dashboard
+    // For now, no credentials needed - just set auth and redirect
+    localStorage.setItem("isAuthenticated", "true")
+    localStorage.setItem("userEmail", email || "mig@maxxbeats.com")
     setIsLoginOpen(false)
     router.push("/dashboard")
   }
