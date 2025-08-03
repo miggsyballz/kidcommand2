@@ -1,16 +1,7 @@
 "use client"
 
 import type * as React from "react"
-import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  GalleryVerticalEnd,
-  Settings2,
-  SquareTerminal,
-  LogOut,
-  PanelLeft,
-} from "lucide-react"
+import { AudioWaveform, BookOpen, Bot, GalleryVerticalEnd, Settings2, SquareTerminal, PanelLeft } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail, useSidebar } from "@/components/ui/sidebar"
@@ -95,12 +86,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <div className={`flex items-center p-2 ${isCollapsed ? "flex-col gap-2" : "justify-between"}`}>
+        <div className="flex items-center justify-center p-2">
           <ThemeToggle />
-          <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8">
-            <LogOut className="h-4 w-4" />
-            <span className="sr-only">Logout</span>
-          </Button>
         </div>
       </SidebarFooter>
       <SidebarRail />
