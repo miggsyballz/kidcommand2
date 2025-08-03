@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { supabase } from "@/lib/supabase"
 import { useRef } from "react"
+import { SortableSpreadsheet } from "./sortable-spreadsheet"
 import { getCellDisplayValue } from "@/lib/duration-utils"
 import * as XLSX from "xlsx"
 
@@ -399,8 +400,6 @@ export function LibraryContent() {
   }
 
   const handleDeleteEntry = async (entryId: string) => {
-    if (!confirm("Are you sure you want to delete this song?")) return
-
     try {
       const { error } = await supabase.from("playlist_entries").delete().eq("id", entryId)
 
@@ -781,7 +780,7 @@ export function LibraryContent() {
         </CardContent>
       </Card>
 
-      {/* Library Spreadsheet */}
+      {/* Library Spreadsheet with Bulk Selection */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -789,64 +788,38 @@ export function LibraryContent() {
               <Music className="h-5 w-5" />
               All Songs ({songs.length})
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                checked={selectedSongs.size === songs.length && songs.length > 0}
-                onCheckedChange={handleSelectAll}
-                className="mr-2"
-              />
-              <span className="text-sm text-muted-foreground">Select All</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={selectedSongs.size === songs.length && songs.length > 0}
+                  onCheckedChange={handleSelectAll}
+                />
+                <span className="text-sm text-muted-foreground">Select All</span>
+              </div>
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="overflow-auto border rounded-lg">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={selectedSongs.size === songs.length && songs.length > 0}
-                        onCheckedChange={handleSelectAll}
-                      />
-                    </TableHead>
-                    {columns.map((column) => (
-                      <TableHead key={column}>{column}</TableHead>
-                    ))}
-                    <TableHead className="w-20">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {songs.map((song) => (
-                    <TableRow key={song.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedSongs.has(song.id)}
-                          onCheckedChange={(checked) => handleSelectSong(song.id, checked as boolean)}
-                        />
-                      </TableCell>
-                      {columns.map((column) => (
-                        <TableCell key={column} className="max-w-[200px] truncate">
-                          {getSongValue(song, column)}
-                        </TableCell>
-                      ))}
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteEntry(song.id.toString())}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+          <SortableSpreadsheet
+            entries={songs.map((song) => ({
+              id: song.id.toString(),
+              data: song.data,
+              position: song.position,
+              created_at: song.created_at,
+              playlist_id: song.playlist_id,
+            }))}
+            columns={columns}
+            onEntriesReorder={handleEntriesReorder}
+            onColumnsReorder={handleColumnsReorder}
+            onCellEdit={handleCellEdit}
+            onHeaderEdit={handleHeaderEdit}
+            onDeleteEntry={handleDeleteEntry}
+            onAddColumn={handleAddColumn}
+            getEntryValue={(entry, column) => getSongValue(entry as any, column)}
+            selectedEntries={selectedSongs}
+            onSelectEntry={handleSelectSong}
+            onSelectAll={handleSelectAll}
+          />
         </CardContent>
       </Card>
     </div>

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { GripVertical, Edit2, Save, X, Trash2, Plus } from "lucide-react"
 import {
   DndContext,
@@ -47,6 +48,9 @@ interface SortableSpreadsheetProps {
   getEntryValue: (entry: SpreadsheetEntry, column: string) => string
   formatValue?: (value: any, column: string) => string
   className?: string
+  selectedEntries?: Set<number>
+  onSelectEntry?: (entryId: number, checked: boolean) => void
+  onSelectAll?: (checked: boolean) => void
 }
 
 // Sortable Row Component
@@ -62,6 +66,8 @@ function SortableRow({
   onDeleteEntry,
   setEditValue,
   getEntryValue,
+  selectedEntries,
+  onSelectEntry,
 }: {
   entry: SpreadsheetEntry
   index: number
@@ -74,6 +80,8 @@ function SortableRow({
   onDeleteEntry: (entryId: string) => void
   setEditValue: (value: string) => void
   getEntryValue: (entry: SpreadsheetEntry, column: string) => string
+  selectedEntries?: Set<number>
+  onSelectEntry?: (entryId: number, checked: boolean) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id })
 
@@ -83,8 +91,22 @@ function SortableRow({
     opacity: isDragging ? 0.5 : 1,
   }
 
+  const isSelected = selectedEntries?.has(Number(entry.id)) || false
+
   return (
-    <tr ref={setNodeRef} style={style} className={`border-b hover:bg-muted/50 ${isDragging ? "bg-muted" : ""}`}>
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`border-b hover:bg-muted/50 ${isDragging ? "bg-muted" : ""} ${isSelected ? "bg-blue-50" : ""}`}
+    >
+      {onSelectEntry && (
+        <td className="py-1 px-2 w-12">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={(checked) => onSelectEntry(Number(entry.id), checked as boolean)}
+          />
+        </td>
+      )}
       <td className="py-1 px-2 text-xs text-muted-foreground w-16">
         <div className="flex items-center gap-1">
           <button className="cursor-grab hover:bg-muted rounded p-1" {...attributes} {...listeners}>
@@ -224,6 +246,9 @@ export function SortableSpreadsheet({
   onAddColumn,
   getEntryValue,
   className = "",
+  selectedEntries,
+  onSelectEntry,
+  onSelectAll,
 }: SortableSpreadsheetProps) {
   const [editingCell, setEditingCell] = useState<{ entryId: string; column: string } | null>(null)
   const [editingHeader, setEditingHeader] = useState<string | null>(null)
@@ -359,6 +384,14 @@ export function SortableSpreadsheet({
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b">
+                  {onSelectEntry && (
+                    <th className="text-left py-1 px-2 font-medium text-xs w-12">
+                      <Checkbox
+                        checked={selectedEntries?.size === entries.length && entries.length > 0}
+                        onCheckedChange={onSelectAll}
+                      />
+                    </th>
+                  )}
                   <th className="text-left py-1 px-2 font-medium text-xs w-16">#</th>
                   <SortableContextProvider items={columns} strategy={horizontalListSortingStrategy}>
                     {columns.map((column) => (
@@ -394,6 +427,8 @@ export function SortableSpreadsheet({
                       onDeleteEntry={onDeleteEntry}
                       setEditValue={setEditValue}
                       getEntryValue={getEntryValue}
+                      selectedEntries={selectedEntries}
+                      onSelectEntry={onSelectEntry}
                     />
                   ))}
                 </SortableContextProvider>
