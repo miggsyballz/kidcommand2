@@ -6,6 +6,16 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { GripVertical, Edit2, X, Trash2, Plus, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface PlaylistEntry {
   id: string
@@ -54,6 +64,7 @@ const SortableRow = React.memo(
     handleRowDragOver,
     handleRowDrop,
     onDeleteEntry,
+    setDeleteConfirmEntry,
   }: {
     entry: PlaylistEntry
     columns: string[]
@@ -74,11 +85,12 @@ const SortableRow = React.memo(
     handleRowDragOver: (e: React.DragEvent) => void
     handleRowDrop: (e: React.DragEvent, targetEntryId: string) => void
     onDeleteEntry: (entryId: string) => Promise<void>
+    setDeleteConfirmEntry: (entry: PlaylistEntry | null) => void
   }) => {
     return (
       <div
         className={cn(
-          "flex border-b hover:bg-gray-50 transition-colors",
+          "flex border-b hover:bg-gray-50 transition-colors group",
           draggedRow === entry.id && "opacity-50",
           selectedEntries.has(Number(entry.id)) && "bg-blue-50 hover:bg-blue-100",
         )}
@@ -107,7 +119,7 @@ const SortableRow = React.memo(
         {columns.map((column) => (
           <div
             key={column}
-            className="border-r p-2 flex items-center group relative flex-shrink-0"
+            className="border-r p-2 flex items-center group/cell relative flex-shrink-0"
             style={{
               width: columnWidths[column] || getMinColumnWidth(column),
               minWidth: columnWidths[column] || getMinColumnWidth(column),
@@ -138,7 +150,7 @@ const SortableRow = React.memo(
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                  className="h-5 w-5 p-0 opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0"
                   onClick={(e) => {
                     e.stopPropagation()
                     handleCellEdit(entry.id, column, getEntryValue(entry, column))
@@ -159,7 +171,7 @@ const SortableRow = React.memo(
             className="h-5 w-5 p-0 text-red-600 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
-              onDeleteEntry(entry.id)
+              setDeleteConfirmEntry(entry)
             }}
           >
             <Trash2 className="h-3 w-3" />
@@ -197,6 +209,8 @@ export function SortableSpreadsheet({
   const [resizeStartWidth, setResizeStartWidth] = useState(0)
   const [tempValue, setTempValue] = useState("")
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
+  const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<PlaylistEntry | null>(null)
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const tableRef = useRef<HTMLDivElement>(null)
 
   // Initialize column widths
@@ -385,7 +399,19 @@ export function SortableSpreadsheet({
 
   const handleBulkDelete = async () => {
     if (selectedEntries.size > 0) {
-      await onBulkDelete(Array.from(selectedEntries))
+      setBulkDeleteConfirm(true)
+    }
+  }
+
+  const confirmBulkDelete = async () => {
+    await onBulkDelete(Array.from(selectedEntries))
+    setBulkDeleteConfirm(false)
+  }
+
+  const confirmSingleDelete = async () => {
+    if (deleteConfirmEntry) {
+      await onDeleteEntry(deleteConfirmEntry.id)
+      setDeleteConfirmEntry(null)
     }
   }
 
@@ -412,11 +438,11 @@ export function SortableSpreadsheet({
         </div>
       )}
 
-      <div className="border rounded-lg overflow-hidden bg-white flex-1 flex flex-col">
+      <div className="border rounded-lg overflow-hidden bg-white flex-1 flex flex-col relative z-10">
         <div ref={tableRef} className="overflow-auto flex-1">
           <div className="min-w-full">
             {/* Header */}
-            <div className="bg-gray-50 border-b flex sticky top-0 z-10">
+            <div className="bg-gray-50 border-b flex sticky top-0 z-20">
               {/* Checkbox column header */}
               {showBulkActions && (
                 <div className="w-12 p-2 border-r bg-gray-50 flex items-center justify-center flex-shrink-0">
@@ -533,11 +559,54 @@ export function SortableSpreadsheet({
                 handleRowDragOver={handleRowDragOver}
                 handleRowDrop={handleRowDrop}
                 onDeleteEntry={onDeleteEntry}
+                setDeleteConfirmEntry={setDeleteConfirmEntry}
               />
             ))}
           </div>
         </div>
       </div>
+
+      {/* Single Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirmEntry} onOpenChange={() => setDeleteConfirmEntry(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Entry</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this entry? This action cannot be undone.
+              {deleteConfirmEntry && (
+                <div className="mt-2 p-2 bg-gray-50 rounded text-sm">
+                  <strong>Entry:</strong> {getEntryValue(deleteConfirmEntry, columns[0] || "id")}
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSingleDelete} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Multiple Entries</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedEntries.size} {selectedEntries.size === 1 ? "entry" : "entries"}?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkDelete} className="bg-red-600 hover:bg-red-700">
+              Delete {selectedEntries.size} {selectedEntries.size === 1 ? "Entry" : "Entries"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

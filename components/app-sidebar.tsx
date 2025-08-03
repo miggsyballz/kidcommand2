@@ -57,8 +57,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const isCollapsed = state === "collapsed"
 
   return (
-    <Sidebar collapsible="icon" className="transition-[width] duration-300 ease-in-out" {...props}>
-      <SidebarHeader>
+    <Sidebar
+      collapsible="icon"
+      className="transition-[width] duration-300 ease-in-out bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-r"
+      {...props}
+    >
+      <SidebarHeader className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between p-2">
           {!isCollapsed && (
             <div className="flex items-center gap-2">
@@ -71,10 +75,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </Button>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <NavMain items={data.navMain} />
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-center gap-2 p-2">
           <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8">
