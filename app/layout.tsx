@@ -8,9 +8,9 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Kid Command - Music Dashboard",
-  description: "Radio station music management dashboard",
-    generator: 'v0.dev'
+  title: "Music Matrix - AI Driven Radio Scheduling",
+  description: "AI-powered radio station music management and scheduling system",
+  generator: "v0.dev",
 }
 
 export default function RootLayout({

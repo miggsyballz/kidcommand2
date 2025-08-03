@@ -27,7 +27,7 @@ const teams = [
   },
 ]
 
-export function TeamSwitcher() {
+export function MusicMatrixTeamSwitcher() {
   const { isMobile } = useSidebar()
   const [activeTeam, setActiveTeam] = React.useState(teams[0])
 
@@ -79,5 +79,3 @@ export function TeamSwitcher() {
     </SidebarMenu>
   )
 }
-
-export default TeamSwitcher

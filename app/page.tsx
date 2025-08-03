@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Music, Upload, Library, Settings, TrendingUp, Clock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { DashboardLayout } from "@/components/dashboard-layout"
+import { redirect } from "next/navigation"
 
 interface DashboardStats {
   totalPlaylists: number
@@ -39,7 +40,7 @@ export default function DashboardPage() {
         setIsAuthenticated(true)
         loadDashboardData()
       } else {
-        router.push("/login")
+        redirect("/login")
       }
       setIsLoading(false)
     }
@@ -101,7 +102,7 @@ export default function DashboardPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          <p className="mt-4 text-gray-600">Loading Music Matrix...</p>
         </div>
       </div>
     )
@@ -117,7 +118,7 @@ export default function DashboardPage() {
         {/* Welcome Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Welcome back, Kid Kelly!</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Welcome back, Mig!</h1>
             <p className="text-muted-foreground">Here's what's happening with your music library today.</p>
           </div>
         </div>

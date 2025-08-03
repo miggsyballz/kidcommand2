@@ -161,7 +161,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
       <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <Music className="h-6 w-6" />
-          <span>Kid Command</span>
+          <span>Music Matrix</span>
         </Link>
       </div>
       <div className="flex-1">
@@ -194,7 +194,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
           </Button>
         </div>
         <div className="text-xs text-muted-foreground text-center">
-          <p>Kid Command</p>
+          <p>Music Matrix</p>
           <p>by MaxxBeats.com</p>
         </div>
       </div>
@@ -220,7 +220,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
             </SheetContent>
           </Sheet>
           <div className="w-full flex-1">
-            <h1 className="text-lg font-semibold">Kid Command</h1>
+            <h1 className="text-lg font-semibold">Music Matrix</h1>
           </div>
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">{children}</main>

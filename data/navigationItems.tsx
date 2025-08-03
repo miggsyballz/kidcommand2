@@ -1,29 +1,29 @@
-import { Radio, Music, Library, Upload, Settings } from "lucide-react"
+import { Home, Music, Library, Bot, Settings } from "lucide-react"
 
 export const navigationItems = [
   {
-    key: "dashboard",
     title: "Dashboard",
-    icon: <Radio className="h-4 w-4" />,
+    url: "/dashboard",
+    icon: Home,
   },
   {
-    key: "playlists",
-    title: "Playlists",
-    icon: <Music className="h-4 w-4" />,
-  },
-  {
-    key: "library",
     title: "Library",
-    icon: <Library className="h-4 w-4" />,
+    url: "/library",
+    icon: Library,
   },
   {
-    key: "upload-data",
-    title: "Upload Data",
-    icon: <Upload className="h-4 w-4" />,
+    title: "Playlists",
+    url: "/playlists",
+    icon: Music,
   },
   {
-    key: "settings",
+    title: "AI Assistant",
+    url: "/ai-assistant",
+    icon: Bot,
+  },
+  {
     title: "Settings",
-    icon: <Settings className="h-4 w-4" />,
+    url: "/settings",
+    icon: Settings,
   },
 ]

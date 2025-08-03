@@ -1,7 +1,10 @@
-"use client"
-
-import { PlaylistManagerContent } from "@/components/playlist-manager-content"
+import { DashboardLayout } from "@/components/dashboard-layout"
+import { PlaylistManagerContent } from "@/components/PlaylistManagerContent"
 
 export default function PlaylistsPage() {
-  return <PlaylistManagerContent />
+  return (
+    <DashboardLayout>
+      <PlaylistManagerContent />
+    </DashboardLayout>
+  )
 }

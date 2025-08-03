@@ -7,7 +7,7 @@ interface DashboardCoordinatorProps {
   activeView: string
 }
 
-export default function DashboardCoordinator({ activeView }: DashboardCoordinatorProps) {
+export function DashboardCoordinator({ activeView }: DashboardCoordinatorProps) {
   const renderContent = () => {
     switch (activeView) {
       case "playlists":
@@ -20,7 +20,7 @@ export default function DashboardCoordinator({ activeView }: DashboardCoordinato
         return (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2">Welcome to Kid Command</h2>
+              <h2 className="text-2xl font-bold mb-2">Welcome to Music Matrix</h2>
               <p className="text-muted-foreground">Select a section from the sidebar to get started.</p>
             </div>
           </div>
