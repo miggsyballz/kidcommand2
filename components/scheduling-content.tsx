@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import {
   Dialog,
   DialogContent,
@@ -26,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Grid, List, Trash2, Eye, Save, Send, Bot, Clock, Music, Calendar } from "lucide-react"
+import { Grid, List, Trash2, Eye, Save, Send, Bot, Clock, Music, Calendar, ArrowLeft, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { SortableSpreadsheet } from "./sortable-spreadsheet"
@@ -311,7 +310,7 @@ export function SchedulingContent() {
       toast.success("Playlist deleted successfully")
       fetchPlaylists()
 
-      // Close dialog if the deleted playlist was selected
+      // Close view if the deleted playlist was selected
       if (selectedPlaylist?.id === id) {
         setSelectedPlaylist(null)
       }
@@ -324,6 +323,12 @@ export function SchedulingContent() {
   const handleViewPlaylist = async (playlist: Playlist) => {
     setSelectedPlaylist(playlist)
     await fetchPlaylistEntries(playlist.id)
+  }
+
+  const handleClosePlaylistView = () => {
+    setSelectedPlaylist(null)
+    setPlaylistEntries([])
+    setColumns([])
   }
 
   // Spreadsheet handlers
@@ -496,288 +501,308 @@ export function SchedulingContent() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* AI Schedule Generator */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5" />
-            AI Schedule Generator
-          </CardTitle>
-          <CardDescription>Create structured radio show schedules with AI assistance</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Chat Messages */}
-            <ScrollArea className="h-64 w-full border rounded-md p-4">
-              <div className="space-y-4">
-                {aiMessages.map((message) => (
-                  <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-full">
+      {/* Left Column - AI Schedule Generator */}
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              AI Schedule Generator
+            </CardTitle>
+            <CardDescription>Create structured radio show schedules with AI assistance</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Chat Messages */}
+              <ScrollArea className="h-64 w-full border rounded-md p-4">
+                <div className="space-y-4">
+                  {aiMessages.map((message) => (
                     <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-                      }`}
+                      key={message.id}
+                      className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                     >
-                      <p className="text-sm">{message.content}</p>
-
-                      {/* Schedule Preview */}
-                      {message.schedule && (
-                        <div className="mt-3 p-3 bg-background rounded border">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold text-sm">{message.schedule.title}</h4>
-                            <Badge variant="secondary">{message.schedule.duration}</Badge>
-                          </div>
-                          <div className="space-y-1 text-xs">
-                            {message.schedule.songs.slice(0, 5).map((song, idx) => (
-                              <div key={idx} className="flex justify-between">
-                                <span className="truncate">
-                                  {song.title} - {song.artist}
-                                </span>
-                                <span className="text-muted-foreground">{song.duration}</span>
-                              </div>
-                            ))}
-                            {message.schedule.songs.length > 5 && (
-                              <p className="text-muted-foreground">
-                                ...and {message.schedule.songs.length - 5} more songs
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex gap-2 mt-3">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button size="sm" variant="outline">
-                                  <Eye className="h-3 w-3 mr-1" />
-                                  View Full Schedule
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-2xl">
-                                <DialogHeader>
-                                  <DialogTitle>{message.schedule.title}</DialogTitle>
-                                  <DialogDescription>Complete schedule timeline</DialogDescription>
-                                </DialogHeader>
-                                <ScrollArea className="h-96">
-                                  <div className="space-y-2">
-                                    {message.schedule.songs.map((song, idx) => (
-                                      <div key={idx} className="flex items-center justify-between p-2 border rounded">
-                                        <div>
-                                          <p className="font-medium">{song.title}</p>
-                                          <p className="text-sm text-muted-foreground">{song.artist}</p>
-                                        </div>
-                                        <div className="text-right text-sm">
-                                          <p>
-                                            {song.start_time} - {song.end_time}
-                                          </p>
-                                          <p className="text-muted-foreground">{song.duration}</p>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </ScrollArea>
-                              </DialogContent>
-                            </Dialog>
-                            <Button size="sm" onClick={() => handleSaveSchedule(message.schedule)}>
-                              <Save className="h-3 w-3 mr-1" />
-                              Save as Playlist
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {isGenerating && (
-                  <div className="flex justify-start">
-                    <div className="bg-muted rounded-lg p-3">
-                      <div className="flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                        <span className="text-sm">Generating schedule...</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-
-            {/* Input Area */}
-            <div className="flex gap-2">
-              <Input
-                placeholder="e.g., Create a 3-hour morning show with upbeat pop music..."
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                disabled={isGenerating}
-              />
-              <Button onClick={handleSendMessage} disabled={isGenerating || !userInput.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Separator />
-
-      {/* Schedules/Playlists Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Your Schedules</h2>
-            <p className="text-muted-foreground">Manage your saved playlists and schedules</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant={viewMode === "cards" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("cards")}
-            >
-              <Grid className="h-4 w-4" />
-            </Button>
-            <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}>
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {playlists.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Music className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No schedules yet</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                Use the AI Schedule Generator above to create your first radio show schedule
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            {viewMode === "cards" ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {playlists.map((playlist) => (
-                  <Card key={playlist.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <CardTitle className="text-lg">{playlist.name}</CardTitle>
-                          {playlist.description && <CardDescription>{playlist.description}</CardDescription>}
-                        </div>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete "{playlist.name}"? This action cannot be undone and will
-                                also delete all songs in this playlist.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeletePlaylist(playlist.id)}>
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Music className="h-4 w-4" />
-                          <span>{playlist.song_count} songs</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                          <span>{playlist.total_duration}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>{formatDate(playlist.created_at)}</span>
-                        </div>
-                      </div>
-                      <Button
-                        className="w-full mt-4 bg-transparent"
-                        variant="outline"
-                        onClick={() => handleViewPlaylist(playlist)}
+                      <div
+                        className={`max-w-[80%] rounded-lg p-3 ${
+                          message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+                        }`}
                       >
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Schedule
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="p-0">
-                  <div className="divide-y">
-                    {playlists.map((playlist) => (
-                      <div key={playlist.id} className="flex items-center justify-between p-4 hover:bg-muted/50">
-                        <div className="space-y-1">
-                          <button
-                            className="text-left hover:underline font-medium"
-                            onClick={() => handleViewPlaylist(playlist)}
-                          >
-                            {playlist.name}
-                          </button>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>{playlist.song_count} songs</span>
-                            <span>{playlist.total_duration}</span>
-                            <span>{formatDate(playlist.created_at)}</span>
+                        <p className="text-sm">{message.content}</p>
+
+                        {/* Schedule Preview */}
+                        {message.schedule && (
+                          <div className="mt-3 p-3 bg-background rounded border">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-sm">{message.schedule.title}</h4>
+                              <Badge variant="secondary">{message.schedule.duration}</Badge>
+                            </div>
+                            <div className="space-y-1 text-xs">
+                              {message.schedule.songs.slice(0, 5).map((song, idx) => (
+                                <div key={idx} className="flex justify-between">
+                                  <span className="truncate">
+                                    {song.title} - {song.artist}
+                                  </span>
+                                  <span className="text-muted-foreground">{song.duration}</span>
+                                </div>
+                              ))}
+                              {message.schedule.songs.length > 5 && (
+                                <p className="text-muted-foreground">
+                                  ...and {message.schedule.songs.length - 5} more songs
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-2 mt-3">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <Eye className="h-3 w-3 mr-1" />
+                                    View Full Schedule
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl">
+                                  <DialogHeader>
+                                    <DialogTitle>{message.schedule.title}</DialogTitle>
+                                    <DialogDescription>Complete schedule timeline</DialogDescription>
+                                  </DialogHeader>
+                                  <ScrollArea className="h-96">
+                                    <div className="space-y-2">
+                                      {message.schedule.songs.map((song, idx) => (
+                                        <div key={idx} className="flex items-center justify-between p-2 border rounded">
+                                          <div>
+                                            <p className="font-medium">{song.title}</p>
+                                            <p className="text-sm text-muted-foreground">{song.artist}</p>
+                                          </div>
+                                          <div className="text-right text-sm">
+                                            <p>
+                                              {song.start_time} - {song.end_time}
+                                            </p>
+                                            <p className="text-muted-foreground">{song.duration}</p>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </ScrollArea>
+                                </DialogContent>
+                              </Dialog>
+                              <Button size="sm" onClick={() => handleSaveSchedule(message.schedule)}>
+                                <Save className="h-3 w-3 mr-1" />
+                                Save as Playlist
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete "{playlist.name}"? This action cannot be undone and will
-                                also delete all songs in this playlist.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeletePlaylist(playlist.id)}>
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
+
+                  {isGenerating && (
+                    <div className="flex justify-start">
+                      <div className="bg-muted rounded-lg p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          <span className="text-sm">Generating schedule...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+
+              {/* Input Area */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g., Create a 3-hour morning show with upbeat pop music..."
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                  disabled={isGenerating}
+                />
+                <Button onClick={handleSendMessage} disabled={isGenerating || !userInput.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Schedules List - Only show when no playlist is selected */}
+        {!selectedPlaylist && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Your Schedules</h2>
+                <p className="text-muted-foreground">Manage your saved playlists and schedules</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={viewMode === "cards" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("cards")}
+                >
+                  <Grid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {playlists.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Music className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No schedules yet</h3>
+                  <p className="text-muted-foreground text-center mb-4">
+                    Use the AI Schedule Generator above to create your first radio show schedule
+                  </p>
                 </CardContent>
               </Card>
+            ) : (
+              <>
+                {viewMode === "cards" ? (
+                  <div className="grid grid-cols-1 gap-4">
+                    {playlists.map((playlist) => (
+                      <Card key={playlist.id} className="hover:shadow-md transition-shadow">
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <CardTitle className="text-lg">{playlist.name}</CardTitle>
+                              {playlist.description && <CardDescription>{playlist.description}</CardDescription>}
+                            </div>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{playlist.name}"? This action cannot be undone and
+                                    will also delete all songs in this playlist.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeletePlaylist(playlist.id)}>
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Music className="h-4 w-4" />
+                              <span>{playlist.song_count} songs</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Clock className="h-4 w-4" />
+                              <span>{playlist.total_duration}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Calendar className="h-4 w-4" />
+                              <span>{formatDate(playlist.created_at)}</span>
+                            </div>
+                          </div>
+                          <Button
+                            className="w-full mt-4 bg-transparent"
+                            variant="outline"
+                            onClick={() => handleViewPlaylist(playlist)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Schedule
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <Card>
+                    <CardContent className="p-0">
+                      <div className="divide-y">
+                        {playlists.map((playlist) => (
+                          <div key={playlist.id} className="flex items-center justify-between p-4 hover:bg-muted/50">
+                            <div className="space-y-1">
+                              <button
+                                className="text-left hover:underline font-medium"
+                                onClick={() => handleViewPlaylist(playlist)}
+                              >
+                                {playlist.name}
+                              </button>
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <span>{playlist.song_count} songs</span>
+                                <span>{playlist.total_duration}</span>
+                                <span>{formatDate(playlist.created_at)}</span>
+                              </div>
+                            </div>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{playlist.name}"? This action cannot be undone and
+                                    will also delete all songs in this playlist.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeletePlaylist(playlist.id)}>
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             )}
-          </>
+          </div>
         )}
       </div>
 
-      {/* Playlist Detail Dialog with Editable Spreadsheet */}
-      {selectedPlaylist && (
-        <Dialog open={!!selectedPlaylist} onOpenChange={() => setSelectedPlaylist(null)}>
-          <DialogContent className="max-w-[95vw] max-h-[90vh] w-full">
-            <DialogHeader className="flex-shrink-0">
-              <DialogTitle className="flex items-center gap-2">
-                <Music className="h-5 w-5" />
-                {selectedPlaylist.name}
-              </DialogTitle>
-              <DialogDescription>
-                {selectedPlaylist.description} • {playlistEntries.length} entries
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="flex-1 min-h-0">
+      {/* Right Column - Schedule Details */}
+      <div className="space-y-6">
+        {selectedPlaylist ? (
+          <Card className="h-full">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={handleClosePlaylistView}>
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Music className="h-5 w-5" />
+                      {selectedPlaylist.name}
+                    </CardTitle>
+                    <CardDescription>
+                      {selectedPlaylist.description} • {playlistEntries.length} entries
+                    </CardDescription>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleClosePlaylistView}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0">
               {entriesLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="text-center">
@@ -788,7 +813,7 @@ export function SchedulingContent() {
               ) : (
                 <div className="h-full">
                   {playlistEntries.length > 0 ? (
-                    <div className="h-[60vh] overflow-hidden">
+                    <div className="h-[calc(100vh-300px)] overflow-hidden">
                       <SortableSpreadsheet
                         entries={playlistEntries.map((entry) => ({
                           id: entry.id.toString(),
@@ -816,10 +841,20 @@ export function SchedulingContent() {
                   )}
                 </div>
               )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="h-full">
+            <CardContent className="flex flex-col items-center justify-center py-12 h-full">
+              <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Select a Schedule</h3>
+              <p className="text-muted-foreground text-center">
+                Choose a schedule from the left to view and edit its details
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   )
 }
