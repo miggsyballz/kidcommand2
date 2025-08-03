@@ -13,7 +13,6 @@ import { useRef } from "react"
 import { SortableSpreadsheet } from "./sortable-spreadsheet"
 import { getCellDisplayValue } from "@/lib/duration-utils"
 import * as XLSX from "xlsx"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface Song {
   id: number
@@ -479,223 +478,208 @@ export function LibraryContent() {
         </div>
       </div>
 
-      {/* Tabs for Browse and Upload */}
-      <Tabs defaultValue="browse" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="browse">Browse Library</TabsTrigger>
-          <TabsTrigger value="upload">Upload Music</TabsTrigger>
-        </TabsList>
+      {/* Upload Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Upload Music Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {uploadSuccess && (
+            <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800 dark:text-green-200">{uploadSuccess}</AlertDescription>
+            </Alert>
+          )}
 
-        <TabsContent value="browse" className="space-y-6">
-          {/* Playlist Filter */}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={selectedPlaylist === null ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedPlaylist(null)}
-            >
-              All Songs ({songs.length})
-            </Button>
-            {playlists.map((playlist) => (
-              <Button
-                key={playlist.id}
-                variant={selectedPlaylist === playlist.id ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedPlaylist(playlist.id)}
-              >
-                {playlist.name} ({playlist.song_count})
-              </Button>
-            ))}
+          {uploadError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{uploadError}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Add to Playlist</label>
+              <Select onValueChange={(val) => setSelectedPlaylistId(val)} defaultValue="new">
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a playlist..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">
+                    <div className="flex items-center gap-2">
+                      <Music className="h-4 w-4" />
+                      Create New Playlist
+                    </div>
+                  </SelectItem>
+                  {playlists.map((p) => (
+                    <SelectItem key={p.id} value={p.id.toString()}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Duplicate Handling</label>
+              <Select onValueChange={(val: "skip" | "create") => setDeduplicateMode(val)} defaultValue="skip">
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">Skip Duplicates</SelectItem>
+                  <SelectItem value="create">Create Anyway</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {/* Library Spreadsheet */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Music className="h-5 w-5" />
-                Entries ({songs.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SortableSpreadsheet
-                entries={songs.map((song) => ({
-                  id: song.id.toString(),
-                  data: song.data,
-                  position: song.position,
-                  created_at: song.created_at,
-                  playlist_id: song.playlist_id,
-                }))}
-                columns={columns}
-                onEntriesReorder={handleEntriesReorder}
-                onColumnsReorder={handleColumnsReorder}
-                onCellEdit={handleCellEdit}
-                onHeaderEdit={handleHeaderEdit}
-                onDeleteEntry={handleDeleteEntry}
-                onAddColumn={handleAddColumn}
-                getEntryValue={(entry, column) => getSongValue(entry as any, column)}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="upload" className="space-y-6">
-          {/* Upload Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5" />
-                Upload Music Data
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {uploadSuccess && (
-                <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  <AlertDescription className="text-green-800 dark:text-green-200">{uploadSuccess}</AlertDescription>
-                </Alert>
-              )}
-
-              {uploadError && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{uploadError}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Add to Playlist</label>
-                  <Select onValueChange={(val) => setSelectedPlaylistId(val)} defaultValue="new">
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a playlist..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new">
-                        <div className="flex items-center gap-2">
-                          <Music className="h-4 w-4" />
-                          Create New Playlist
-                        </div>
-                      </SelectItem>
-                      {playlists.map((p) => (
-                        <SelectItem key={p.id} value={p.id.toString()}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+          <div className="relative border-2 border-dashed rounded-lg p-6 text-center">
+            {selectedFile ? (
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-left text-green-600">
+                  <p className="font-medium">{selectedFile.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {csvData.length} rows • {(selectedFile.size / 1024).toFixed(1)} KB
+                  </p>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Duplicate Handling</label>
-                  <Select onValueChange={(val: "skip" | "create") => setDeduplicateMode(val)} defaultValue="skip">
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="skip">Skip Duplicates</SelectItem>
-                      <SelectItem value="create">Create Anyway</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="relative border-2 border-dashed rounded-lg p-6 text-center">
-                {selectedFile ? (
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-left text-green-600">
-                      <p className="font-medium">{selectedFile.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {csvData.length} rows • {(selectedFile.size / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSelectedFile(null)
-                        setCsvData([])
-                        setHeaders([])
-                        setUploadError(null)
-                        setUploadSuccess(null)
-                        fileInputRef.current?.value && (fileInputRef.current.value = "")
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
-                    <p className="text-sm">
-                      Drop CSV or Excel file here or{" "}
-                      <span
-                        onClick={() => fileInputRef.current?.click()}
-                        className="text-primary cursor-pointer underline"
-                      >
-                        browse
-                      </span>
-                    </p>
-                  </>
-                )}
-                <Input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-                  className="hidden"
-                />
-              </div>
-
-              {csvData.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="h-4 w-4" />
-                    <h4 className="font-medium text-sm">Data Preview (First 5 Rows)</h4>
-                  </div>
-                  <div className="border rounded-md overflow-auto max-h-[300px]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          {headers.map((h, i) => (
-                            <TableHead key={i}>{h}</TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {csvData.slice(0, 5).map((row, i) => (
-                          <TableRow key={i}>
-                            {headers.map((h, j) => (
-                              <TableCell key={j} className="max-w-[200px] truncate">
-                                {getCellDisplayValue(row[h], h)}
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <Button onClick={handleUpload} disabled={isUploading || !csvData.length} size="lg" className="min-w-40">
-                  {isUploading ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Upload to Library
-                    </>
-                  )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setSelectedFile(null)
+                    setCsvData([])
+                    setHeaders([])
+                    setUploadError(null)
+                    setUploadSuccess(null)
+                    fileInputRef.current?.value && (fileInputRef.current.value = "")
+                  }}
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            ) : (
+              <>
+                <Upload className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
+                <p className="text-sm">
+                  Drop CSV or Excel file here or{" "}
+                  <span onClick={() => fileInputRef.current?.click()} className="text-primary cursor-pointer underline">
+                    browse
+                  </span>
+                </p>
+              </>
+            )}
+            <Input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+              className="hidden"
+            />
+          </div>
+
+          {csvData.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <FileText className="h-4 w-4" />
+                <h4 className="font-medium text-sm">Data Preview (First 5 Rows)</h4>
+              </div>
+              <div className="border rounded-md overflow-auto max-h-[300px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {headers.map((h, i) => (
+                        <TableHead key={i}>{h}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {csvData.slice(0, 5).map((row, i) => (
+                      <TableRow key={i}>
+                        {headers.map((h, j) => (
+                          <TableCell key={j} className="max-w-[200px] truncate">
+                            {getCellDisplayValue(row[h], h)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <Button onClick={handleUpload} disabled={isUploading || !csvData.length} size="lg" className="min-w-40">
+              {isUploading ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload to Library
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Playlist Filter */}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant={selectedPlaylist === null ? "default" : "outline"}
+          size="sm"
+          onClick={() => setSelectedPlaylist(null)}
+        >
+          All Songs ({songs.length})
+        </Button>
+        {playlists.map((playlist) => (
+          <Button
+            key={playlist.id}
+            variant={selectedPlaylist === playlist.id ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedPlaylist(playlist.id)}
+          >
+            {playlist.name} ({playlist.song_count})
+          </Button>
+        ))}
+      </div>
+
+      {/* Library Spreadsheet */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Music className="h-5 w-5" />
+            Entries ({songs.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SortableSpreadsheet
+            entries={songs.map((song) => ({
+              id: song.id.toString(),
+              data: song.data,
+              position: song.position,
+              created_at: song.created_at,
+              playlist_id: song.playlist_id,
+            }))}
+            columns={columns}
+            onEntriesReorder={handleEntriesReorder}
+            onColumnsReorder={handleColumnsReorder}
+            onCellEdit={handleCellEdit}
+            onHeaderEdit={handleHeaderEdit}
+            onDeleteEntry={handleDeleteEntry}
+            onAddColumn={handleAddColumn}
+            getEntryValue={(entry, column) => getSongValue(entry as any, column)}
+          />
+        </CardContent>
+      </Card>
     </div>
   )
 }
