@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,234 +49,191 @@ export function SortableSpreadsheet({
   onSelectEntry,
   onSelectAll,
 }: SortableSpreadsheetProps) {
-  const [draggedEntry, setDraggedEntry] = useState<string | null>(null)
-  const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+  // Editing state
   const [editingCell, setEditingCell] = useState<{ entryId: string; column: string } | null>(null)
   const [editingHeader, setEditingHeader] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
-  const [dragOverEntry, setDragOverEntry] = useState<string | null>(null)
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
+
+  // Drag and drop state
+  const [draggedRowIndex, setDraggedRowIndex] = useState<number | null>(null)
+  const [draggedColumnIndex, setDraggedColumnIndex] = useState<number | null>(null)
+  const [dragOverRowIndex, setDragOverRowIndex] = useState<number | null>(null)
+  const [dragOverColumnIndex, setDragOverColumnIndex] = useState<number | null>(null)
 
   // Column resizing state
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
+  const [isResizing, setIsResizing] = useState(false)
   const [resizingColumn, setResizingColumn] = useState<string | null>(null)
-  const [resizeStartX, setResizeStartX] = useState(0)
-  const [resizeStartWidth, setResizeStartWidth] = useState(0)
+  const [startX, setStartX] = useState(0)
+  const [startWidth, setStartWidth] = useState(0)
 
-  const dragCounter = useRef(0)
   const tableRef = useRef<HTMLTableElement>(null)
 
-  // Initialize default column widths
+  // Initialize column widths
   useEffect(() => {
-    const defaultWidths: Record<string, number> = {}
+    const newWidths: Record<string, number> = {}
     columns.forEach((column) => {
       if (!columnWidths[column]) {
-        defaultWidths[column] = 120 // Default width
+        newWidths[column] = 120
       }
     })
-    if (Object.keys(defaultWidths).length > 0) {
-      setColumnWidths((prev) => ({ ...prev, ...defaultWidths }))
+    if (Object.keys(newWidths).length > 0) {
+      setColumnWidths((prev) => ({ ...prev, ...newWidths }))
     }
-  }, [columns, columnWidths])
+  }, [columns])
+
+  // Row drag handlers
+  const handleRowDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedRowIndex(index)
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", index.toString())
+  }
+
+  const handleRowDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (draggedRowIndex !== null && draggedRowIndex !== index) {
+      setDragOverRowIndex(index)
+    }
+  }
+
+  const handleRowDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault()
+
+    if (draggedRowIndex === null || draggedRowIndex === dropIndex) {
+      setDraggedRowIndex(null)
+      setDragOverRowIndex(null)
+      return
+    }
+
+    const newEntries = [...entries]
+    const [draggedEntry] = newEntries.splice(draggedRowIndex, 1)
+    newEntries.splice(dropIndex, 0, draggedEntry)
+
+    // Update positions
+    const updatedEntries = newEntries.map((entry, index) => ({
+      ...entry,
+      position: index + 1,
+    }))
+
+    try {
+      await onEntriesReorder(updatedEntries)
+    } catch (error) {
+      console.error("Error reordering entries:", error)
+    }
+
+    setDraggedRowIndex(null)
+    setDragOverRowIndex(null)
+  }
+
+  const handleRowDragEnd = () => {
+    setDraggedRowIndex(null)
+    setDragOverRowIndex(null)
+  }
+
+  // Column drag handlers
+  const handleColumnDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedColumnIndex(index)
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", index.toString())
+  }
+
+  const handleColumnDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (draggedColumnIndex !== null && draggedColumnIndex !== index) {
+      setDragOverColumnIndex(index)
+    }
+  }
+
+  const handleColumnDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault()
+
+    if (draggedColumnIndex === null || draggedColumnIndex === dropIndex) {
+      setDraggedColumnIndex(null)
+      setDragOverColumnIndex(null)
+      return
+    }
+
+    const newColumns = [...columns]
+    const [draggedColumn] = newColumns.splice(draggedColumnIndex, 1)
+    newColumns.splice(dropIndex, 0, draggedColumn)
+
+    try {
+      await onColumnsReorder(newColumns)
+    } catch (error) {
+      console.error("Error reordering columns:", error)
+    }
+
+    setDraggedColumnIndex(null)
+    setDragOverColumnIndex(null)
+  }
+
+  const handleColumnDragEnd = () => {
+    setDraggedColumnIndex(null)
+    setDragOverColumnIndex(null)
+  }
 
   // Column resize handlers
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent, column: string) => {
-      e.preventDefault()
-      e.stopPropagation()
-      setResizingColumn(column)
-      setResizeStartX(e.clientX)
-      setResizeStartWidth(columnWidths[column] || 120)
-      document.addEventListener("mousemove", handleResizeMove)
-      document.addEventListener("mouseup", handleResizeEnd)
-    },
-    [columnWidths],
-  )
+  const handleMouseDown = (e: React.MouseEvent, column: string) => {
+    e.preventDefault()
+    setIsResizing(true)
+    setResizingColumn(column)
+    setStartX(e.clientX)
+    setStartWidth(columnWidths[column] || 120)
+  }
 
-  const handleResizeMove = useCallback(
+  const handleMouseMove = useCallback(
     (e: MouseEvent) => {
-      if (!resizingColumn) return
+      if (!isResizing || !resizingColumn) return
 
-      const deltaX = e.clientX - resizeStartX
-      const newWidth = Math.max(80, resizeStartWidth + deltaX) // Minimum width of 80px
+      const diff = e.clientX - startX
+      const newWidth = Math.max(80, startWidth + diff)
 
       setColumnWidths((prev) => ({
         ...prev,
         [resizingColumn]: newWidth,
       }))
     },
-    [resizingColumn, resizeStartX, resizeStartWidth],
+    [isResizing, resizingColumn, startX, startWidth],
   )
 
-  const handleResizeEnd = useCallback(() => {
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false)
     setResizingColumn(null)
-    document.removeEventListener("mousemove", handleResizeMove)
-    document.removeEventListener("mouseup", handleResizeEnd)
-  }, [handleResizeMove])
-
-  // Auto-fit column width to content
-  const handleAutoFit = useCallback(
-    (column: string) => {
-      if (!tableRef.current) return
-
-      // Find the longest content in this column
-      let maxWidth = 80 // Minimum width
-      const headerWidth = column.length * 8 + 60 // Approximate header width
-      maxWidth = Math.max(maxWidth, headerWidth)
-
-      // Check all cell values in this column
-      entries.forEach((entry) => {
-        const value = getEntryValue(entry, column)
-        const cellWidth = value.length * 7 + 20 // Approximate cell width
-        maxWidth = Math.max(maxWidth, cellWidth)
-      })
-
-      // Cap at reasonable maximum
-      maxWidth = Math.min(maxWidth, 300)
-
-      setColumnWidths((prev) => ({
-        ...prev,
-        [column]: maxWidth,
-      }))
-    },
-    [entries, getEntryValue],
-  )
-
-  // Entry drag handlers
-  const handleEntryDragStart = useCallback((e: React.DragEvent, entryId: string) => {
-    setDraggedEntry(entryId)
-    setIsDragging(true)
-    e.dataTransfer.effectAllowed = "move"
-    e.dataTransfer.setData("text/plain", entryId)
   }, [])
 
-  const handleEntryDragOver = useCallback(
-    (e: React.DragEvent, entryId: string) => {
-      e.preventDefault()
-      e.dataTransfer.dropEffect = "move"
-      if (draggedEntry && draggedEntry !== entryId) {
-        setDragOverEntry(entryId)
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove)
+      document.addEventListener("mouseup", handleMouseUp)
+      return () => {
+        document.removeEventListener("mousemove", handleMouseMove)
+        document.removeEventListener("mouseup", handleMouseUp)
       }
-    },
-    [draggedEntry],
-  )
-
-  const handleEntryDragLeave = useCallback((e: React.DragEvent) => {
-    dragCounter.current--
-    if (dragCounter.current === 0) {
-      setDragOverEntry(null)
     }
-  }, [])
+  }, [isResizing, handleMouseMove, handleMouseUp])
 
-  const handleEntryDragEnter = useCallback((e: React.DragEvent) => {
-    dragCounter.current++
-  }, [])
+  // Auto-fit column
+  const handleDoubleClick = (column: string) => {
+    let maxWidth = 80
+    const headerWidth = column.length * 8 + 60
+    maxWidth = Math.max(maxWidth, headerWidth)
 
-  const handleEntryDrop = useCallback(
-    (e: React.DragEvent, targetEntryId: string) => {
-      e.preventDefault()
-      dragCounter.current = 0
+    entries.forEach((entry) => {
+      const value = getEntryValue(entry, column)
+      const cellWidth = value.length * 7 + 20
+      maxWidth = Math.max(maxWidth, cellWidth)
+    })
 
-      if (!draggedEntry || draggedEntry === targetEntryId) {
-        setDraggedEntry(null)
-        setDragOverEntry(null)
-        setIsDragging(false)
-        return
-      }
+    maxWidth = Math.min(maxWidth, 300)
 
-      const draggedIndex = entries.findIndex((entry) => entry.id === draggedEntry)
-      const targetIndex = entries.findIndex((entry) => entry.id === targetEntryId)
-
-      if (draggedIndex === -1 || targetIndex === -1) {
-        setDraggedEntry(null)
-        setDragOverEntry(null)
-        setIsDragging(false)
-        return
-      }
-
-      const newEntries = [...entries]
-      const [draggedItem] = newEntries.splice(draggedIndex, 1)
-      newEntries.splice(targetIndex, 0, draggedItem)
-
-      // Update positions
-      const updatedEntries = newEntries.map((entry, index) => ({
-        ...entry,
-        position: index + 1,
-      }))
-
-      onEntriesReorder(updatedEntries)
-      setDraggedEntry(null)
-      setDragOverEntry(null)
-      setIsDragging(false)
-    },
-    [draggedEntry, entries, onEntriesReorder],
-  )
-
-  const handleEntryDragEnd = useCallback(() => {
-    setDraggedEntry(null)
-    setDragOverEntry(null)
-    setIsDragging(false)
-    dragCounter.current = 0
-  }, [])
-
-  // Column drag handlers
-  const handleColumnDragStart = useCallback((e: React.DragEvent, column: string) => {
-    setDraggedColumn(column)
-    e.dataTransfer.effectAllowed = "move"
-    e.dataTransfer.setData("text/plain", column)
-  }, [])
-
-  const handleColumnDragOver = useCallback(
-    (e: React.DragEvent, column: string) => {
-      e.preventDefault()
-      e.dataTransfer.dropEffect = "move"
-      if (draggedColumn && draggedColumn !== column) {
-        setDragOverColumn(column)
-      }
-    },
-    [draggedColumn],
-  )
-
-  const handleColumnDrop = useCallback(
-    (e: React.DragEvent, targetColumn: string) => {
-      e.preventDefault()
-
-      if (!draggedColumn || draggedColumn === targetColumn) {
-        setDraggedColumn(null)
-        setDragOverColumn(null)
-        return
-      }
-
-      const draggedIndex = columns.findIndex((col) => col === draggedColumn)
-      const targetIndex = columns.findIndex((col) => col === targetColumn)
-
-      if (draggedIndex === -1 || targetIndex === -1) {
-        setDraggedColumn(null)
-        setDragOverColumn(null)
-        return
-      }
-
-      const newColumns = [...columns]
-      const [draggedItem] = newColumns.splice(draggedIndex, 1)
-      newColumns.splice(targetIndex, 0, draggedItem)
-
-      onColumnsReorder(newColumns)
-      setDraggedColumn(null)
-      setDragOverColumn(null)
-    },
-    [draggedColumn, columns, onColumnsReorder],
-  )
-
-  const handleColumnDragEnd = useCallback(() => {
-    setDraggedColumn(null)
-    setDragOverColumn(null)
-  }, [])
+    setColumnWidths((prev) => ({
+      ...prev,
+      [column]: maxWidth,
+    }))
+  }
 
   // Edit handlers
   const handleCellClick = (entryId: string, column: string) => {
-    if (isDragging || resizingColumn) return
-
     const entry = entries.find((e) => e.id === entryId)
     if (entry) {
       setEditingCell({ entryId, column })
@@ -287,7 +243,6 @@ export function SortableSpreadsheet({
   }
 
   const handleHeaderClick = (column: string) => {
-    if (resizingColumn) return
     setEditingHeader(column)
     setEditValue(column)
   }
@@ -296,11 +251,8 @@ export function SortableSpreadsheet({
     if (!editingCell) return
 
     try {
-      // Convert display value back to storage format
       const processedValue = parseDisplayValueForStorage(editValue, editingCell.column)
-
       await onCellEdit(editingCell.entryId, editingCell.column, processedValue)
-
       setEditingCell(null)
       setEditValue("")
     } catch (err) {
@@ -313,7 +265,6 @@ export function SortableSpreadsheet({
 
     try {
       await onHeaderEdit(editingHeader, editValue.trim())
-
       setEditingHeader(null)
       setEditValue("")
     } catch (err) {
@@ -326,20 +277,6 @@ export function SortableSpreadsheet({
     setEditingHeader(null)
     setEditValue("")
   }
-
-  // Generate CSS custom properties for column widths
-  const tableStyle = {
-    "--selection-width": "48px",
-    "--row-number-width": "64px",
-    "--created-width": "80px",
-    "--actions-width": "64px",
-    ...Object.fromEntries(
-      columns.map((column) => [
-        `--col-${column.replace(/[^a-zA-Z0-9]/g, "_")}-width`,
-        `${columnWidths[column] || 120}px`,
-      ]),
-    ),
-  } as React.CSSProperties
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -362,31 +299,30 @@ export function SortableSpreadsheet({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table
-            ref={tableRef}
-            className="w-full border-collapse text-sm"
-            style={{ ...tableStyle, tableLayout: "fixed" }}
-          >
+          <table ref={tableRef} className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
             <thead>
               <tr className="border-b">
                 {onSelectEntry && (
-                  <th className="text-left py-1 px-2 font-medium text-xs" style={{ width: "var(--selection-width)" }}>
+                  <th className="text-left py-1 px-2 font-medium text-xs w-12">
                     <Checkbox
                       checked={selectedEntries?.size === entries.length && entries.length > 0}
                       onCheckedChange={onSelectAll}
                     />
                   </th>
                 )}
-                <th className="text-left py-1 px-2 font-medium text-xs" style={{ width: "var(--row-number-width)" }}>
-                  #
-                </th>
-                {columns.map((column, index) => (
+                <th className="text-left py-1 px-2 font-medium text-xs w-16">#</th>
+                {columns.map((column, columnIndex) => (
                   <th
                     key={column}
                     className={`text-left py-1 px-2 font-medium text-xs relative ${
-                      dragOverColumn === column ? "bg-blue-100 dark:bg-blue-900/20" : ""
-                    } ${draggedColumn === column ? "opacity-50" : ""}`}
-                    style={{ width: `var(--col-${column.replace(/[^a-zA-Z0-9]/g, "_")}-width)` }}
+                      dragOverColumnIndex === columnIndex ? "bg-blue-100 dark:bg-blue-900/20" : ""
+                    } ${draggedColumnIndex === columnIndex ? "opacity-50" : ""}`}
+                    style={{ width: `${columnWidths[column] || 120}px` }}
+                    draggable
+                    onDragStart={(e) => handleColumnDragStart(e, columnIndex)}
+                    onDragOver={(e) => handleColumnDragOver(e, columnIndex)}
+                    onDrop={(e) => handleColumnDrop(e, columnIndex)}
+                    onDragEnd={handleColumnDragEnd}
                   >
                     {editingHeader === column ? (
                       <div className="flex items-center gap-1">
@@ -395,6 +331,7 @@ export function SortableSpreadsheet({
                           onChange={(e) => setEditValue(e.target.value)}
                           className="h-6 text-xs"
                           onKeyPress={(e) => e.key === "Enter" && saveHeaderEdit()}
+                          autoFocus
                         />
                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveHeaderEdit}>
                           <Save className="h-3 w-3" />
@@ -405,17 +342,14 @@ export function SortableSpreadsheet({
                       </div>
                     ) : (
                       <div className="flex items-center gap-1 group">
-                        <button
-                          className="cursor-grab hover:bg-muted rounded p-1"
-                          draggable
-                          onDragStart={(e) => handleColumnDragStart(e, column)}
-                          onDragOver={(e) => handleColumnDragOver(e, column)}
-                          onDrop={(e) => handleColumnDrop(e, column)}
-                          onDragEnd={handleColumnDragEnd}
-                        >
+                        <div className="cursor-grab hover:bg-muted rounded p-1">
                           <GripVertical className="h-3 w-3 text-muted-foreground" />
-                        </button>
-                        <span className="truncate flex-1" title={column} onClick={() => handleHeaderClick(column)}>
+                        </div>
+                        <span
+                          className="truncate flex-1 cursor-pointer"
+                          title={column}
+                          onClick={() => handleHeaderClick(column)}
+                        >
                           {column}
                           {isDurationColumn(column) && <span className="text-muted-foreground ml-1">(mm:ss)</span>}
                         </span>
@@ -432,54 +366,46 @@ export function SortableSpreadsheet({
 
                     {/* Column Resize Handle */}
                     <div
-                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500 hover:w-0.5 z-10"
-                      onMouseDown={(e) => handleResizeStart(e, column)}
-                      onDoubleClick={() => handleAutoFit(column)}
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500 z-10"
+                      onMouseDown={(e) => handleMouseDown(e, column)}
+                      onDoubleClick={() => handleDoubleClick(column)}
                       title="Drag to resize, double-click to auto-fit"
                     />
                   </th>
                 ))}
-                <th className="text-left py-1 px-2 font-medium text-xs" style={{ width: "var(--created-width)" }}>
-                  Created
-                </th>
-                <th className="text-left py-1 px-2 font-medium text-xs" style={{ width: "var(--actions-width)" }}>
-                  Actions
-                </th>
+                <th className="text-left py-1 px-2 font-medium text-xs w-20">Created</th>
+                <th className="text-left py-1 px-2 font-medium text-xs w-16">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry, index) => (
+              {entries.map((entry, rowIndex) => (
                 <tr
                   key={entry.id}
                   className={`border-b hover:bg-muted/50 ${
-                    dragOverEntry === entry.id ? "bg-blue-50 dark:bg-blue-900/10 border-l-4 border-blue-500" : ""
-                  } ${draggedEntry === entry.id ? "opacity-50" : ""} ${
+                    dragOverRowIndex === rowIndex ? "bg-blue-50 dark:bg-blue-900/10 border-l-4 border-blue-500" : ""
+                  } ${draggedRowIndex === rowIndex ? "opacity-50" : ""} ${
                     selectedEntries?.has(Number(entry.id)) ? "bg-blue-50" : ""
                   }`}
+                  draggable
+                  onDragStart={(e) => handleRowDragStart(e, rowIndex)}
+                  onDragOver={(e) => handleRowDragOver(e, rowIndex)}
+                  onDrop={(e) => handleRowDrop(e, rowIndex)}
+                  onDragEnd={handleRowDragEnd}
                 >
                   {onSelectEntry && (
-                    <td className="py-1 px-2">
+                    <td className="py-1 px-2 w-12">
                       <Checkbox
                         checked={selectedEntries?.has(Number(entry.id)) || false}
                         onCheckedChange={(checked) => onSelectEntry(Number(entry.id), checked as boolean)}
                       />
                     </td>
                   )}
-                  <td className="py-1 px-2 text-xs text-muted-foreground">
+                  <td className="py-1 px-2 text-xs text-muted-foreground w-16">
                     <div className="flex items-center gap-1">
-                      <button
-                        className="cursor-grab hover:bg-muted rounded p-1"
-                        draggable
-                        onDragStart={(e) => handleEntryDragStart(e, entry.id)}
-                        onDragOver={(e) => handleEntryDragOver(e, entry.id)}
-                        onDragEnter={handleEntryDragEnter}
-                        onDragLeave={handleEntryDragLeave}
-                        onDrop={(e) => handleEntryDrop(e, entry.id)}
-                        onDragEnd={handleEntryDragEnd}
-                      >
+                      <div className="cursor-grab hover:bg-muted rounded p-1">
                         <GripVertical className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                      {index + 1}
+                      </div>
+                      {rowIndex + 1}
                     </div>
                   </td>
                   {columns.map((column) => {
@@ -487,7 +413,7 @@ export function SortableSpreadsheet({
                     const isEditing = editingCell?.entryId === entry.id && editingCell?.column === column
 
                     return (
-                      <td key={column} className="py-1 px-2">
+                      <td key={column} className="py-1 px-2" style={{ width: `${columnWidths[column] || 120}px` }}>
                         {isEditing ? (
                           <div className="flex items-center gap-1">
                             <Input
@@ -496,6 +422,7 @@ export function SortableSpreadsheet({
                               className="h-6 text-xs"
                               onKeyPress={(e) => e.key === "Enter" && saveCellEdit()}
                               placeholder={isDurationColumn(column) ? "MM:SS" : ""}
+                              autoFocus
                             />
                             <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveCellEdit}>
                               <Save className="h-3 w-3" />
@@ -536,13 +463,6 @@ export function SortableSpreadsheet({
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* Resize indicator */}
-      {resizingColumn && (
-        <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-50">
-          <div className="absolute inset-0 bg-black/10" />
         </div>
       )}
     </div>
