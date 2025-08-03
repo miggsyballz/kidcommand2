@@ -1,16 +1,7 @@
 "use client"
 
 import type * as React from "react"
-import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  GalleryVerticalEnd,
-  Settings2,
-  SquareTerminal,
-  PanelLeft,
-  LogOut,
-} from "lucide-react"
+import { BookOpen, Bot, GalleryVerticalEnd, Settings2, SquareTerminal, PanelLeft, LogOut } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail, useSidebar } from "@/components/ui/sidebar"
@@ -43,14 +34,9 @@ const data = {
       icon: BookOpen,
     },
     {
-      title: "Playlists",
+      title: "Scheduling",
       url: "/playlists",
       icon: Bot,
-    },
-    {
-      title: "AI Assistant",
-      url: "/ai-assistant",
-      icon: AudioWaveform,
     },
     {
       title: "Settings",
