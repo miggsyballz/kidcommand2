@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { List, Trash2, Save, Send, Bot, Music, Calendar, X } from "lucide-react"
+import { List, Trash2, Save, Send, Bot, Music, Calendar, X, ArrowLeft } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { SortableSpreadsheet } from "./sortable-spreadsheet"
@@ -588,13 +588,33 @@ export function SchedulingContent() {
         </Card>
       </div>
 
-      {/* Bottom Panel - Schedule List and Details */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Schedule List */}
-        <div className="w-80 flex-shrink-0 border-r bg-background flex flex-col">
-          <div className="flex-shrink-0 p-4 border-b">
+      {/* Schedule Navigation and Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Schedule Header */}
+        <div className="flex-shrink-0 border-b p-4">
+          {selectedPlaylist ? (
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Your Schedules</h3>
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" size="sm" onClick={handleClosePlaylistView}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div>
+                  <h1 className="text-xl font-bold">{selectedPlaylist.name}</h1>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedPlaylist.description} • {playlistEntries.length} entries
+                  </p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleClosePlaylistView}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-bold">Your Schedules</h1>
+                <p className="text-sm text-muted-foreground">Manage your saved playlists and schedules</p>
+              </div>
               <Button
                 variant={viewMode === "list" ? "default" : "outline"}
                 size="sm"
@@ -603,141 +623,129 @@ export function SchedulingContent() {
                 <List className="h-4 w-4" />
               </Button>
             </div>
-          </div>
-
-          <ScrollArea className="flex-1">
-            {playlists.length === 0 ? (
-              <div className="p-4 text-center">
-                <Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No schedules yet</h3>
-                <p className="text-sm text-muted-foreground">
-                  Use the AI Schedule Generator above to create your first radio show schedule
-                </p>
-              </div>
-            ) : (
-              <div className="p-3">
-                {playlists.map((playlist) => (
-                  <div
-                    key={playlist.id}
-                    className={`p-3 border rounded-lg mb-3 cursor-pointer transition-colors ${
-                      selectedPlaylist?.id === playlist.id ? "bg-primary/10 border-primary" : "hover:bg-muted/50"
-                    }`}
-                    onClick={() => handleViewPlaylist(playlist)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-sm truncate">{playlist.name}</h4>
-                        {playlist.description && (
-                          <p className="text-xs text-muted-foreground mt-1 truncate">{playlist.description}</p>
-                        )}
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
-                          <span>{playlist.song_count} songs</span>
-                          <span>{playlist.total_duration}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{formatDate(playlist.created_at)}</p>
-                      </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete "{playlist.name}"? This action cannot be undone and will
-                              also delete all songs in this playlist.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeletePlaylist(playlist.id)}>
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
+          )}
         </div>
 
-        {/* Right Panel - Schedule Details */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-hidden">
           {selectedPlaylist ? (
-            <>
-              <div className="flex-shrink-0 border-b p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h1 className="text-xl font-bold">{selectedPlaylist.name}</h1>
-                    <p className="text-sm text-muted-foreground">
-                      {selectedPlaylist.description} • {playlistEntries.length} entries
+            <div className="h-full p-4">
+              {entriesLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading schedule entries...</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-full">
+                  {playlistEntries.length > 0 ? (
+                    <div className="h-full">
+                      <SortableSpreadsheet
+                        entries={playlistEntries.map((entry) => ({
+                          id: entry.id.toString(),
+                          data: entry.data,
+                          position: entry.position,
+                          created_at: entry.created_at,
+                          playlist_id: entry.playlist_id,
+                        }))}
+                        columns={columns}
+                        onEntriesReorder={handleEntriesReorder}
+                        onColumnsReorder={handleColumnsReorder}
+                        onCellEdit={handleCellEdit}
+                        onHeaderEdit={handleHeaderEdit}
+                        onDeleteEntry={handleDeleteEntry}
+                        onAddColumn={handleAddColumn}
+                        getEntryValue={(entry, column) => getEntryValue(entry as any, column)}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Music className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No entries in this schedule</h3>
+                      <p className="text-muted-foreground">This schedule doesn't have any songs yet.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <ScrollArea className="h-full">
+              {playlists.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <Music className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No schedules yet</h3>
+                    <p className="text-muted-foreground">
+                      Use the AI Schedule Generator above to create your first radio show schedule
                     </p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={handleClosePlaylistView}>
-                    <X className="h-4 w-4" />
-                  </Button>
                 </div>
-              </div>
-
-              <div className="flex-1 overflow-hidden p-4">
-                {entriesLoading ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                      <p className="text-muted-foreground">Loading schedule entries...</p>
-                    </div>
+              ) : (
+                <div className="p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {playlists.map((playlist) => (
+                      <Card
+                        key={playlist.id}
+                        className="cursor-pointer hover:shadow-md transition-shadow"
+                        onClick={() => handleViewPlaylist(playlist)}
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <CardTitle className="text-lg truncate">{playlist.name}</CardTitle>
+                              {playlist.description && (
+                                <p className="text-sm text-muted-foreground mt-1 truncate">{playlist.description}</p>
+                              )}
+                            </div>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{playlist.name}"? This action cannot be undone and
+                                    will also delete all songs in this playlist.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeletePlaylist(playlist.id)}>
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Music className="h-4 w-4" />
+                              <span>{playlist.song_count} songs</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Calendar className="h-4 w-4" />
+                              <span>{formatDate(playlist.created_at)}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{playlist.total_duration}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
-                ) : (
-                  <div className="h-full">
-                    {playlistEntries.length > 0 ? (
-                      <div className="h-full">
-                        <SortableSpreadsheet
-                          entries={playlistEntries.map((entry) => ({
-                            id: entry.id.toString(),
-                            data: entry.data,
-                            position: entry.position,
-                            created_at: entry.created_at,
-                            playlist_id: entry.playlist_id,
-                          }))}
-                          columns={columns}
-                          onEntriesReorder={handleEntriesReorder}
-                          onColumnsReorder={handleColumnsReorder}
-                          onCellEdit={handleCellEdit}
-                          onHeaderEdit={handleHeaderEdit}
-                          onDeleteEntry={handleDeleteEntry}
-                          onAddColumn={handleAddColumn}
-                          getEntryValue={(entry, column) => getEntryValue(entry as any, column)}
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <Music className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                        <h3 className="text-lg font-semibold mb-2">No entries in this schedule</h3>
-                        <p className="text-muted-foreground">This schedule doesn't have any songs yet.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <Calendar className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Select a Schedule</h3>
-                <p className="text-muted-foreground">Choose a schedule from the left to view and edit its details</p>
-              </div>
-            </div>
+                </div>
+              )}
+            </ScrollArea>
           )}
         </div>
       </div>
