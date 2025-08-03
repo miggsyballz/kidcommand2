@@ -4,10 +4,11 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Music, AlertCircle, Upload, CheckCircle2, FileText, X, Info } from "lucide-react"
+import { Music, AlertCircle, Upload, CheckCircle2, FileText, X, Info, Trash2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -16,9 +17,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { supabase } from "@/lib/supabase"
 import { useRef } from "react"
-import { SortableSpreadsheet } from "./sortable-spreadsheet"
 import { getCellDisplayValue } from "@/lib/duration-utils"
 import * as XLSX from "xlsx"
 
@@ -52,7 +62,8 @@ export function LibraryContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [columns, setColumns] = useState<string[]>([])
-  const [selectedPlaylist, setSelectedPlaylist] = useState<number | null>(null)
+  const [selectedSongs, setSelectedSongs] = useState<Set<number>>(new Set())
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
 
   // Upload states
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -68,7 +79,7 @@ export function LibraryContent() {
 
   useEffect(() => {
     fetchData()
-  }, [selectedPlaylist])
+  }, [])
 
   const fetchData = async () => {
     try {
@@ -88,17 +99,11 @@ export function LibraryContent() {
 
       setPlaylists(playlistsData || [])
 
-      // Fetch songs
-      let query = supabase
+      // Fetch all songs (no playlist filtering)
+      const { data: songsData, error: songsError } = await supabase
         .from("playlist_entries")
         .select("id, data, playlist_id, source_file, position, created_at")
         .order("position", { ascending: true })
-
-      if (selectedPlaylist) {
-        query = query.eq("playlist_id", selectedPlaylist)
-      }
-
-      const { data: songsData, error: songsError } = await query
 
       if (songsError) {
         console.error("Error fetching songs:", songsError)
@@ -136,37 +141,18 @@ export function LibraryContent() {
 
       setSongs(processedSongs)
 
-      // Extract columns from playlist structure or infer from data
-      let columnsToUse: string[] = []
-
-      if (selectedPlaylist) {
-        const playlist = playlistsData?.find((p) => p.id === selectedPlaylist)
-        if (playlist?.column_structure) {
-          try {
-            const parsedStructure = JSON.parse(playlist.column_structure)
-            if (Array.isArray(parsedStructure)) {
-              columnsToUse = parsedStructure
+      // Extract columns from all songs data
+      const allColumns = new Set<string>()
+      processedSongs.forEach((song) => {
+        if (song.data && typeof song.data === "object") {
+          Object.keys(song.data).forEach((key) => {
+            if (key && key.trim()) {
+              allColumns.add(key)
             }
-          } catch (e) {
-            console.warn("Failed to parse column_structure:", e)
-          }
+          })
         }
-      }
-
-      // If no column structure, infer from data
-      if (columnsToUse.length === 0) {
-        const allColumns = new Set<string>()
-        processedSongs.forEach((song) => {
-          if (song.data && typeof song.data === "object") {
-            Object.keys(song.data).forEach((key) => {
-              if (key && key.trim()) {
-                allColumns.add(key)
-              }
-            })
-          }
-        })
-        columnsToUse = Array.from(allColumns).sort()
-      }
+      })
+      const columnsToUse = Array.from(allColumns).sort()
 
       console.log("Extracted columns:", columnsToUse)
       setColumns(columnsToUse)
@@ -349,18 +335,6 @@ export function LibraryContent() {
 
   const handleColumnsReorder = async (newColumns: string[]) => {
     setColumns(newColumns)
-
-    try {
-      if (selectedPlaylist) {
-        await supabase
-          .from("playlists")
-          .update({ column_structure: JSON.stringify(newColumns) })
-          .eq("id", selectedPlaylist)
-      }
-    } catch (err) {
-      console.error("Error updating column order:", err)
-      setError("Failed to update column order")
-    }
   }
 
   const handleCellEdit = async (entryId: string, column: string, value: any) => {
@@ -418,15 +392,6 @@ export function LibraryContent() {
           return { ...song, data: newData }
         }),
       )
-
-      // Update column structure if playlist is selected
-      if (selectedPlaylist) {
-        const newColumns = columns.map((col) => (col === oldColumn ? newColumn : col))
-        await supabase
-          .from("playlists")
-          .update({ column_structure: JSON.stringify(newColumns) })
-          .eq("id", selectedPlaylist)
-      }
     } catch (err) {
       console.error("Error updating header:", err)
       throw err
@@ -442,6 +407,11 @@ export function LibraryContent() {
       if (error) throw error
 
       setSongs((prev) => prev.filter((s) => s.id !== Number(entryId)))
+      setSelectedSongs((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(Number(entryId))
+        return newSet
+      })
     } catch (err) {
       console.error("Error deleting song:", err)
       setError("Failed to delete song")
@@ -460,14 +430,6 @@ export function LibraryContent() {
 
     const newColumns = [...columns, trimmedName].sort()
     setColumns(newColumns)
-
-    // Update column structure if playlist is selected
-    if (selectedPlaylist) {
-      await supabase
-        .from("playlists")
-        .update({ column_structure: JSON.stringify(newColumns) })
-        .eq("id", selectedPlaylist)
-    }
   }
 
   const handleCloseDuplicateDialog = () => {
@@ -478,6 +440,47 @@ export function LibraryContent() {
       )
     }
     setDuplicateInfo(null)
+  }
+
+  const handleSelectSong = (songId: number, checked: boolean) => {
+    setSelectedSongs((prev) => {
+      const newSet = new Set(prev)
+      if (checked) {
+        newSet.add(songId)
+      } else {
+        newSet.delete(songId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedSongs(new Set(songs.map((song) => song.id)))
+    } else {
+      setSelectedSongs(new Set())
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedSongs.size === 0) return
+
+    try {
+      const songIds = Array.from(selectedSongs)
+      const { error } = await supabase.from("playlist_entries").delete().in("id", songIds)
+
+      if (error) throw error
+
+      setSongs((prev) => prev.filter((song) => !selectedSongs.has(song.id)))
+      setSelectedSongs(new Set())
+      setShowBulkDeleteDialog(false)
+      setUploadSuccess(`Successfully deleted ${songIds.length} songs.`)
+
+      setTimeout(() => setUploadSuccess(null), 3000)
+    } catch (err) {
+      console.error("Error deleting songs:", err)
+      setError("Failed to delete selected songs")
+    }
   }
 
   if (loading) {
@@ -583,6 +586,24 @@ export function LibraryContent() {
         </DialogContent>
       </Dialog>
 
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Selected Songs</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedSongs.size} selected songs? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">
+              Delete {selectedSongs.size} Songs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -591,10 +612,21 @@ export function LibraryContent() {
             Music Library
           </h1>
           <p className="text-muted-foreground">
-            {songs.length} entries • {columns.length} columns
+            {songs.length} total songs • {columns.length} columns
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {selectedSongs.size > 0 && (
+            <Button
+              onClick={() => setShowBulkDeleteDialog(true)}
+              variant="destructive"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Selected ({selectedSongs.size})
+            </Button>
+          )}
           <Button onClick={fetchData} variant="outline" size="sm">
             Refresh
           </Button>
@@ -749,53 +781,72 @@ export function LibraryContent() {
         </CardContent>
       </Card>
 
-      {/* Playlist Filter */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={selectedPlaylist === null ? "default" : "outline"}
-          size="sm"
-          onClick={() => setSelectedPlaylist(null)}
-        >
-          All Songs ({songs.length})
-        </Button>
-        {playlists.map((playlist) => (
-          <Button
-            key={playlist.id}
-            variant={selectedPlaylist === playlist.id ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSelectedPlaylist(playlist.id)}
-          >
-            {playlist.name} ({playlist.song_count})
-          </Button>
-        ))}
-      </div>
-
       {/* Library Spreadsheet */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Music className="h-5 w-5" />
-            Entries ({songs.length})
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Music className="h-5 w-5" />
+              All Songs ({songs.length})
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={selectedSongs.size === songs.length && songs.length > 0}
+                onCheckedChange={handleSelectAll}
+                className="mr-2"
+              />
+              <span className="text-sm text-muted-foreground">Select All</span>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <SortableSpreadsheet
-            entries={songs.map((song) => ({
-              id: song.id.toString(),
-              data: song.data,
-              position: song.position,
-              created_at: song.created_at,
-              playlist_id: song.playlist_id,
-            }))}
-            columns={columns}
-            onEntriesReorder={handleEntriesReorder}
-            onColumnsReorder={handleColumnsReorder}
-            onCellEdit={handleCellEdit}
-            onHeaderEdit={handleHeaderEdit}
-            onDeleteEntry={handleDeleteEntry}
-            onAddColumn={handleAddColumn}
-            getEntryValue={(entry, column) => getSongValue(entry as any, column)}
-          />
+          <div className="space-y-4">
+            <div className="overflow-auto border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedSongs.size === songs.length && songs.length > 0}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </TableHead>
+                    {columns.map((column) => (
+                      <TableHead key={column}>{column}</TableHead>
+                    ))}
+                    <TableHead className="w-20">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {songs.map((song) => (
+                    <TableRow key={song.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedSongs.has(song.id)}
+                          onCheckedChange={(checked) => handleSelectSong(song.id, checked as boolean)}
+                        />
+                      </TableCell>
+                      {columns.map((column) => (
+                        <TableCell key={column} className="max-w-[200px] truncate">
+                          {getSongValue(song, column)}
+                        </TableCell>
+                      ))}
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteEntry(song.id.toString())}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
