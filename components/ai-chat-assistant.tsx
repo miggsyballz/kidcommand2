@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Mic, MicOff, Send, Volume2, VolumeX } from "lucide-react"
-import type { SpeechRecognition } from "types/speech-recognition" // Assuming SpeechRecognition is a type or interface
 
 interface Message {
   id: string
@@ -32,7 +31,7 @@ export function AIChatAssistant() {
   const [isListening, setIsListening] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<any>(null)
 
   useEffect(() => {
     if (scrollAreaRef.current) {
