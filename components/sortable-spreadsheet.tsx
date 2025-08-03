@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -59,7 +59,90 @@ export function SortableSpreadsheet({
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
+  // Column resizing state
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null)
+  const [resizeStartX, setResizeStartX] = useState(0)
+  const [resizeStartWidth, setResizeStartWidth] = useState(0)
+
   const dragCounter = useRef(0)
+  const tableRef = useRef<HTMLTableElement>(null)
+
+  // Initialize default column widths
+  useEffect(() => {
+    const defaultWidths: Record<string, number> = {}
+    columns.forEach((column) => {
+      if (!columnWidths[column]) {
+        defaultWidths[column] = 120 // Default width
+      }
+    })
+    if (Object.keys(defaultWidths).length > 0) {
+      setColumnWidths((prev) => ({ ...prev, ...defaultWidths }))
+    }
+  }, [columns, columnWidths])
+
+  // Column resize handlers
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent, column: string) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setResizingColumn(column)
+      setResizeStartX(e.clientX)
+      setResizeStartWidth(columnWidths[column] || 120)
+      document.addEventListener("mousemove", handleResizeMove)
+      document.addEventListener("mouseup", handleResizeEnd)
+    },
+    [columnWidths],
+  )
+
+  const handleResizeMove = useCallback(
+    (e: MouseEvent) => {
+      if (!resizingColumn) return
+
+      const deltaX = e.clientX - resizeStartX
+      const newWidth = Math.max(80, resizeStartWidth + deltaX) // Minimum width of 80px
+
+      setColumnWidths((prev) => ({
+        ...prev,
+        [resizingColumn]: newWidth,
+      }))
+    },
+    [resizingColumn, resizeStartX, resizeStartWidth],
+  )
+
+  const handleResizeEnd = useCallback(() => {
+    setResizingColumn(null)
+    document.removeEventListener("mousemove", handleResizeMove)
+    document.removeEventListener("mouseup", handleResizeEnd)
+  }, [handleResizeMove])
+
+  // Auto-fit column width to content
+  const handleAutoFit = useCallback(
+    (column: string) => {
+      if (!tableRef.current) return
+
+      // Find the longest content in this column
+      let maxWidth = 80 // Minimum width
+      const headerWidth = column.length * 8 + 60 // Approximate header width
+      maxWidth = Math.max(maxWidth, headerWidth)
+
+      // Check all cell values in this column
+      entries.forEach((entry) => {
+        const value = getEntryValue(entry, column)
+        const cellWidth = value.length * 7 + 20 // Approximate cell width
+        maxWidth = Math.max(maxWidth, cellWidth)
+      })
+
+      // Cap at reasonable maximum
+      maxWidth = Math.min(maxWidth, 300)
+
+      setColumnWidths((prev) => ({
+        ...prev,
+        [column]: maxWidth,
+      }))
+    },
+    [entries, getEntryValue],
+  )
 
   // Entry drag handlers
   const handleEntryDragStart = useCallback((e: React.DragEvent, entryId: string) => {
@@ -193,7 +276,7 @@ export function SortableSpreadsheet({
 
   // Edit handlers
   const handleCellClick = (entryId: string, column: string) => {
-    if (isDragging) return
+    if (isDragging || resizingColumn) return
 
     const entry = entries.find((e) => e.id === entryId)
     if (entry) {
@@ -204,6 +287,7 @@ export function SortableSpreadsheet({
   }
 
   const handleHeaderClick = (column: string) => {
+    if (resizingColumn) return
     setEditingHeader(column)
     setEditValue(column)
   }
@@ -243,6 +327,20 @@ export function SortableSpreadsheet({
     setEditValue("")
   }
 
+  // Generate CSS custom properties for column widths
+  const tableStyle = {
+    "--selection-width": "48px",
+    "--row-number-width": "64px",
+    "--created-width": "80px",
+    "--actions-width": "64px",
+    ...Object.fromEntries(
+      columns.map((column) => [
+        `--col-${column.replace(/[^a-zA-Z0-9]/g, "_")}-width`,
+        `${columnWidths[column] || 120}px`,
+      ]),
+    ),
+  } as React.CSSProperties
+
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Add Column Button */}
@@ -264,24 +362,31 @@ export function SortableSpreadsheet({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table
+            ref={tableRef}
+            className="w-full border-collapse text-sm"
+            style={{ ...tableStyle, tableLayout: "fixed" }}
+          >
             <thead>
               <tr className="border-b">
                 {onSelectEntry && (
-                  <th className="text-left py-1 px-2 font-medium text-xs w-12">
+                  <th className="text-left py-1 px-2 font-medium text-xs" style={{ width: "var(--selection-width)" }}>
                     <Checkbox
                       checked={selectedEntries?.size === entries.length && entries.length > 0}
                       onCheckedChange={onSelectAll}
                     />
                   </th>
                 )}
-                <th className="text-left py-1 px-2 font-medium text-xs w-16">#</th>
-                {columns.map((column) => (
+                <th className="text-left py-1 px-2 font-medium text-xs" style={{ width: "var(--row-number-width)" }}>
+                  #
+                </th>
+                {columns.map((column, index) => (
                   <th
                     key={column}
-                    className={`text-left py-1 px-2 font-medium text-xs min-w-[100px] max-w-[150px] ${
+                    className={`text-left py-1 px-2 font-medium text-xs relative ${
                       dragOverColumn === column ? "bg-blue-100 dark:bg-blue-900/20" : ""
                     } ${draggedColumn === column ? "opacity-50" : ""}`}
+                    style={{ width: `var(--col-${column.replace(/[^a-zA-Z0-9]/g, "_")}-width)` }}
                   >
                     {editingHeader === column ? (
                       <div className="flex items-center gap-1">
@@ -310,7 +415,7 @@ export function SortableSpreadsheet({
                         >
                           <GripVertical className="h-3 w-3 text-muted-foreground" />
                         </button>
-                        <span className="truncate" title={column}>
+                        <span className="truncate flex-1" title={column} onClick={() => handleHeaderClick(column)}>
                           {column}
                           {isDurationColumn(column) && <span className="text-muted-foreground ml-1">(mm:ss)</span>}
                         </span>
@@ -324,10 +429,22 @@ export function SortableSpreadsheet({
                         </Button>
                       </div>
                     )}
+
+                    {/* Column Resize Handle */}
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500 hover:w-0.5 z-10"
+                      onMouseDown={(e) => handleResizeStart(e, column)}
+                      onDoubleClick={() => handleAutoFit(column)}
+                      title="Drag to resize, double-click to auto-fit"
+                    />
                   </th>
                 ))}
-                <th className="text-left py-1 px-2 font-medium text-xs w-20">Created</th>
-                <th className="text-left py-1 px-2 font-medium text-xs w-16">Actions</th>
+                <th className="text-left py-1 px-2 font-medium text-xs" style={{ width: "var(--created-width)" }}>
+                  Created
+                </th>
+                <th className="text-left py-1 px-2 font-medium text-xs" style={{ width: "var(--actions-width)" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -341,14 +458,14 @@ export function SortableSpreadsheet({
                   }`}
                 >
                   {onSelectEntry && (
-                    <td className="py-1 px-2 w-12">
+                    <td className="py-1 px-2">
                       <Checkbox
                         checked={selectedEntries?.has(Number(entry.id)) || false}
                         onCheckedChange={(checked) => onSelectEntry(Number(entry.id), checked as boolean)}
                       />
                     </td>
                   )}
-                  <td className="py-1 px-2 text-xs text-muted-foreground w-16">
+                  <td className="py-1 px-2 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <button
                         className="cursor-grab hover:bg-muted rounded p-1"
@@ -370,7 +487,7 @@ export function SortableSpreadsheet({
                     const isEditing = editingCell?.entryId === entry.id && editingCell?.column === column
 
                     return (
-                      <td key={column} className="py-1 px-2 max-w-[150px]">
+                      <td key={column} className="py-1 px-2">
                         {isEditing ? (
                           <div className="flex items-center gap-1">
                             <Input
@@ -419,6 +536,13 @@ export function SortableSpreadsheet({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Resize indicator */}
+      {resizingColumn && (
+        <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-50">
+          <div className="absolute inset-0 bg-black/10" />
         </div>
       )}
     </div>
