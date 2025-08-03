@@ -1,23 +1,27 @@
 "use client"
 
-import React, { useState, useRef, useCallback, useEffect } from "react"
+import type React from "react"
+import { useState, useRef } from "react"
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { restrictToHorizontalAxis } from "@dnd-kit/modifiers"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { GripVertical, Edit2, X, Trash2, Plus, Check } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { GripVertical, Trash2, Edit2, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { Music } from "lucide-react" // Import Music component
 
-interface PlaylistEntry {
+interface Entry {
   id: string
   data: Record<string, any>
   position: number
@@ -26,140 +30,286 @@ interface PlaylistEntry {
 }
 
 interface SortableSpreadsheetProps {
-  entries: PlaylistEntry[]
+  entries: Entry[]
   columns: string[]
-  onEntriesReorder: (entries: PlaylistEntry[]) => void
+  onEntriesReorder: (entries: Entry[]) => void
   onColumnsReorder: (columns: string[]) => void
   onCellEdit: (entryId: string, column: string, value: any) => Promise<void>
   onHeaderEdit: (oldColumn: string, newColumn: string) => Promise<void>
   onDeleteEntry: (entryId: string) => Promise<void>
-  onAddColumn: () => Promise<void>
-  getEntryValue: (entry: PlaylistEntry, column: string) => string
-  selectedEntries: Set<number>
-  onSelectEntry: (entryId: number, checked: boolean) => void
-  onSelectAll: (checked: boolean) => void
-  onBulkDelete: (entryIds: number[]) => Promise<void>
+  onAddColumn: () => void
+  getEntryValue: (entry: Entry, column: string) => string
+  selectedEntries?: Set<number>
+  onSelectEntry?: (entryId: number, checked: boolean) => void
+  onSelectAll?: (checked: boolean) => void
+  onBulkDelete?: (entryIds: number[]) => Promise<void>
   showBulkActions?: boolean
 }
 
-// Define SortableRow component first
-const SortableRow = React.memo(
-  ({
-    entry,
-    columns,
-    columnWidths,
-    getMinColumnWidth,
-    getEntryValue,
-    selectedEntries,
-    onSelectEntry,
-    draggedRow,
-    editingCell,
-    tempValue,
-    setTempValue,
-    handleCellEdit,
-    handleCellSave,
-    handleCellCancel,
-    handleRowDragStart,
-    handleRowDragOver,
-    handleRowDrop,
-  }: {
-    entry: PlaylistEntry
-    columns: string[]
-    columnWidths: Record<string, number>
-    getMinColumnWidth: (headerText: string) => number
-    getEntryValue: (entry: PlaylistEntry, column: string) => string
-    selectedEntries: Set<number>
-    onSelectEntry: (entryId: number, checked: boolean) => void
-    draggedRow: string | null
-    editingCell: { entryId: string; column: string } | null
-    tempValue: string
-    setTempValue: (value: string) => void
-    handleCellEdit: (entryId: string, column: string, value: string) => void
-    handleCellSave: () => Promise<void>
-    handleCellCancel: () => void
-    handleRowDragStart: (e: React.DragEvent, entryId: string) => void
-    handleRowDragOver: (e: React.DragEvent) => void
-    handleRowDrop: (e: React.DragEvent, targetEntryId: string) => void
-  }) => {
-    return (
-      <div
-        className={cn(
-          "flex border-b hover:bg-gray-50 transition-colors group",
-          draggedRow === entry.id && "opacity-50",
-          selectedEntries.has(Number(entry.id)) && "bg-blue-50 hover:bg-blue-100",
-        )}
-        draggable
-        onDragStart={(e) => handleRowDragStart(e, entry.id)}
-        onDragOver={handleRowDragOver}
-        onDrop={(e) => handleRowDrop(e, entry.id)}
-      >
-        {/* Checkbox column */}
-        <div className="w-12 p-2 border-r flex items-center justify-center flex-shrink-0">
-          <Checkbox
-            checked={selectedEntries.has(Number(entry.id))}
-            onCheckedChange={(checked) => onSelectEntry(Number(entry.id), !!checked)}
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+// Define columns that should be half width
+const NARROW_COLUMNS = new Set(["category", "energy", "era", "mood", "sound", "tempo", "type", "uid"])
 
-        {/* Drag handle */}
-        <div className="w-12 p-2 border-r flex items-center justify-center flex-shrink-0">
-          <GripVertical className="h-4 w-4 text-gray-400 cursor-grab active:cursor-grabbing" />
-        </div>
+function SortableHeader({
+  column,
+  onEdit,
+  isNarrow = false,
+}: {
+  column: string
+  onEdit: (oldColumn: string, newColumn: string) => void
+  isNarrow?: boolean
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column })
 
-        {/* Dynamic columns */}
-        {columns.map((column) => (
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState(column)
+  const [columnWidth, setColumnWidth] = useState(isNarrow ? 80 : 150)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeRef = useRef<HTMLDivElement>(null)
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(0)
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    width: `${columnWidth}px`,
+    minWidth: isNarrow ? "60px" : "100px",
+    maxWidth: isNarrow ? "120px" : "300px",
+  }
+
+  const handleEdit = () => {
+    if (editValue.trim() && editValue !== column) {
+      onEdit(column, editValue.trim())
+    }
+    setIsEditing(false)
+    setEditValue(column)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleEdit()
+    } else if (e.key === "Escape") {
+      setIsEditing(false)
+      setEditValue(column)
+    }
+  }
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsResizing(true)
+    startXRef.current = e.clientX
+    startWidthRef.current = columnWidth
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const diff = e.clientX - startXRef.current
+      const newWidth = Math.max(isNarrow ? 60 : 100, Math.min(isNarrow ? 120 : 300, startWidthRef.current + diff))
+      setColumnWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    }
+
+    document.addEventListener("mousemove", handleMouseMove)
+    document.addEventListener("mouseup", handleMouseUp)
+  }
+
+  const handleDoubleClick = () => {
+    // Auto-fit column width based on content
+    setColumnWidth(isNarrow ? 80 : 150)
+  }
+
+  return (
+    <TableHead
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "relative bg-muted/50 font-semibold text-xs uppercase tracking-wide border-r border-border/50 select-none",
+        isDragging && "z-50 shadow-lg bg-background border",
+        isResizing && "select-none",
+      )}
+    >
+      <div className="flex items-center justify-between h-full min-h-[40px] px-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded opacity-60 hover:opacity-100 transition-opacity"
+          >
+            <GripVertical className="h-3 w-3" />
+          </div>
+
+          {isEditing ? (
+            <div className="flex items-center gap-1 flex-1">
+              <Input
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleEdit}
+                className="h-6 text-xs px-1 flex-1 min-w-0"
+                autoFocus
+              />
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer hover:bg-muted/50 rounded px-1 py-1"
+              onClick={() => setIsEditing(true)}
+              onDoubleClick={handleDoubleClick}
+            >
+              <span className="truncate text-xs font-medium">{column}</span>
+              <Edit2 className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+            </div>
+          )}
+        </div>
+
+        {/* Resize handle */}
+        <div
+          ref={resizeRef}
+          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 transition-colors"
+          onMouseDown={handleMouseDown}
+        />
+      </div>
+    </TableHead>
+  )
+}
+
+function SortableRow({
+  entry,
+  columns,
+  onCellEdit,
+  onDeleteEntry,
+  getEntryValue,
+  isSelected,
+  onSelectEntry,
+}: {
+  entry: Entry
+  columns: string[]
+  onCellEdit: (entryId: string, column: string, value: any) => Promise<void>
+  onDeleteEntry: (entryId: string) => Promise<void>
+  getEntryValue: (entry: Entry, column: string) => string
+  isSelected?: boolean
+  onSelectEntry?: (entryId: number, checked: boolean) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id })
+
+  const [editingCell, setEditingCell] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState("")
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  const handleCellEdit = async (column: string, value: string) => {
+    try {
+      await onCellEdit(entry.id, column, value)
+      setEditingCell(null)
+    } catch (error) {
+      console.error("Failed to edit cell:", error)
+    }
+  }
+
+  const handleCellClick = (column: string, currentValue: string) => {
+    setEditingCell(column)
+    setEditValue(currentValue)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent, column: string) => {
+    if (e.key === "Enter") {
+      handleCellEdit(column, editValue)
+    } else if (e.key === "Escape") {
+      setEditingCell(null)
+    }
+  }
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "group hover:bg-muted/30 transition-colors border-b border-border/30",
+        isDragging && "z-50 shadow-lg bg-background border",
+        isSelected && "bg-blue-50 dark:bg-blue-950/20",
+      )}
+    >
+      {/* Selection checkbox */}
+      {onSelectEntry && (
+        <TableCell className="w-12 p-2">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={(checked) => onSelectEntry(Number(entry.id), checked as boolean)}
+          />
+        </TableCell>
+      )}
+
+      {/* Drag handle */}
+      <TableCell className="w-12 p-2">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded opacity-60 hover:opacity-100 transition-opacity"
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+      </TableCell>
+
+      {/* Data cells */}
+      {columns.map((column) => {
+        const value = getEntryValue(entry, column)
+        const isEditing = editingCell === column
+        const isNarrow = NARROW_COLUMNS.has(column.toLowerCase())
+
+        return (
+          <TableCell
             key={column}
-            className="border-r p-2 flex items-center group/cell relative flex-shrink-0"
+            className={cn(
+              "border-r border-border/30 p-2 text-sm",
+              isNarrow ? "max-w-[120px] min-w-[60px]" : "max-w-[300px] min-w-[100px]",
+            )}
             style={{
-              width: columnWidths[column] || getMinColumnWidth(column),
-              minWidth: columnWidths[column] || getMinColumnWidth(column),
+              width: isNarrow ? "80px" : "150px",
             }}
           >
-            {editingCell?.entryId === entry.id && editingCell?.column === column ? (
-              <div className="flex items-center gap-1 w-full">
-                <Input
-                  value={tempValue}
-                  onChange={(e) => setTempValue(e.target.value)}
-                  className="h-6 text-xs flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleCellSave()
-                    if (e.key === "Escape") handleCellCancel()
-                  }}
-                  autoFocus
-                />
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 flex-shrink-0" onClick={handleCellSave}>
-                  <Check className="h-3 w-3" />
-                </Button>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 flex-shrink-0" onClick={handleCellCancel}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
+            {isEditing ? (
+              <Input
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={(e) => handleKeyDown(e, column)}
+                onBlur={() => handleCellEdit(column, editValue)}
+                className="h-7 text-sm px-2 w-full"
+                autoFocus
+              />
             ) : (
-              <div className="flex items-center gap-1 w-full min-w-0">
-                <span className="text-xs truncate flex-1">{getEntryValue(entry, column)}</span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-5 w-5 p-0 opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleCellEdit(entry.id, column, getEntryValue(entry, column))
-                  }}
-                >
-                  <Edit2 className="h-3 w-3" />
-                </Button>
+              <div
+                className="cursor-pointer hover:bg-muted/50 rounded px-2 py-1 min-h-[28px] flex items-center truncate"
+                onClick={() => handleCellClick(column, value)}
+                title={value}
+              >
+                {value || "-"}
               </div>
             )}
-          </div>
-        ))}
-      </div>
-    )
-  },
-)
+          </TableCell>
+        )
+      })}
 
-SortableRow.displayName = "SortableRow"
+      {/* Actions */}
+      <TableCell className="w-16 p-2">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDeleteEntry(entry.id)}
+            className="h-7 w-7 p-0 opacity-60 hover:opacity-100 hover:bg-red-100 hover:text-red-600 transition-all"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  )
+}
 
 export function SortableSpreadsheet({
   entries,
@@ -171,375 +321,201 @@ export function SortableSpreadsheet({
   onDeleteEntry,
   onAddColumn,
   getEntryValue,
-  selectedEntries,
+  selectedEntries = new Set(),
   onSelectEntry,
   onSelectAll,
   onBulkDelete,
   showBulkActions = false,
 }: SortableSpreadsheetProps) {
-  const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
-  const [draggedRow, setDraggedRow] = useState<string | null>(null)
-  const [editingCell, setEditingCell] = useState<{ entryId: string; column: string } | null>(null)
-  const [editingHeader, setEditingHeader] = useState<string | null>(null)
-  const [resizingColumn, setResizingColumn] = useState<string | null>(null)
-  const [resizeStartX, setResizeStartX] = useState(0)
-  const [resizeStartWidth, setResizeStartWidth] = useState(0)
-  const [tempValue, setTempValue] = useState("")
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
-  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
-  const tableRef = useRef<HTMLDivElement>(null)
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [dragType, setDragType] = useState<"column" | "row" | null>(null)
 
-  // Initialize column widths
-  const getMinColumnWidth = useCallback((headerText: string) => {
-    return Math.max(150, Math.min(400, headerText.length * 8 + 60))
-  }, [])
-
-  useEffect(() => {
-    const newWidths: Record<string, number> = {}
-    let hasChanges = false
-
-    columns.forEach((column) => {
-      if (!columnWidths[column]) {
-        newWidths[column] = getMinColumnWidth(column)
-        hasChanges = true
-      } else {
-        newWidths[column] = columnWidths[column]
-      }
-    })
-
-    if (hasChanges) {
-      setColumnWidths(newWidths)
-    }
-  }, [columns, getMinColumnWidth])
-
-  const handleColumnDragStart = (e: React.DragEvent, column: string) => {
-    setDraggedColumn(column)
-    e.dataTransfer.effectAllowed = "move"
-  }
-
-  const handleColumnDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
-  }
-
-  const handleColumnDrop = (e: React.DragEvent, targetColumn: string) => {
-    e.preventDefault()
-    if (!draggedColumn || draggedColumn === targetColumn) return
-
-    const draggedIndex = columns.findIndex((col) => col === draggedColumn)
-    const targetIndex = columns.findIndex((col) => col === targetColumn)
-
-    if (draggedIndex === -1 || targetIndex === -1) return
-
-    const newColumns = [...columns]
-    const [draggedCol] = newColumns.splice(draggedIndex, 1)
-    newColumns.splice(targetIndex, 0, draggedCol)
-
-    onColumnsReorder(newColumns)
-    setDraggedColumn(null)
-  }
-
-  const handleRowDragStart = (e: React.DragEvent, entryId: string) => {
-    setDraggedRow(entryId)
-    e.dataTransfer.effectAllowed = "move"
-  }
-
-  const handleRowDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
-  }
-
-  const handleRowDrop = (e: React.DragEvent, targetEntryId: string) => {
-    e.preventDefault()
-    if (!draggedRow || draggedRow === targetEntryId) return
-
-    const draggedIndex = entries.findIndex((entry) => entry.id === draggedRow)
-    const targetIndex = entries.findIndex((entry) => entry.id === targetEntryId)
-
-    if (draggedIndex === -1 || targetIndex === -1) return
-
-    const newEntries = [...entries]
-    const [draggedEntry] = newEntries.splice(draggedIndex, 1)
-    newEntries.splice(targetIndex, 0, draggedEntry)
-
-    // Update positions
-    const updatedEntries = newEntries.map((entry, index) => ({
-      ...entry,
-      position: index + 1,
-    }))
-
-    onEntriesReorder(updatedEntries)
-    setDraggedRow(null)
-  }
-
-  const handleCellEdit = (entryId: string, column: string, value: string) => {
-    setEditingCell({ entryId, column })
-    setTempValue(value || "")
-  }
-
-  const handleCellSave = async () => {
-    if (!editingCell) return
-
-    try {
-      await onCellEdit(editingCell.entryId, editingCell.column, tempValue)
-      setEditingCell(null)
-      setTempValue("")
-    } catch (error) {
-      console.error("Error saving cell:", error)
-    }
-  }
-
-  const handleCellCancel = () => {
-    setEditingCell(null)
-    setTempValue("")
-  }
-
-  const handleHeaderEdit = (column: string, title: string) => {
-    setEditingHeader(column)
-    setTempValue(title)
-  }
-
-  const handleHeaderSave = async () => {
-    if (!editingHeader) return
-
-    try {
-      await onHeaderEdit(editingHeader, tempValue)
-      setEditingHeader(null)
-      setTempValue("")
-    } catch (error) {
-      console.error("Error saving header:", error)
-    }
-  }
-
-  const handleHeaderCancel = () => {
-    setEditingHeader(null)
-    setTempValue("")
-  }
-
-  const handleResizeStart = (e: React.MouseEvent, column: string) => {
-    e.preventDefault()
-    setResizingColumn(column)
-    setResizeStartX(e.clientX)
-    setResizeStartWidth(columnWidths[column] || getMinColumnWidth(column))
-  }
-
-  const handleResizeMove = useCallback(
-    (e: MouseEvent) => {
-      if (!resizingColumn) return
-
-      const deltaX = e.clientX - resizeStartX
-      const newWidth = Math.max(100, resizeStartWidth + deltaX)
-
-      setColumnWidths((prev) => ({
-        ...prev,
-        [resizingColumn]: newWidth,
-      }))
-    },
-    [resizingColumn, resizeStartX, resizeStartWidth],
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   )
 
-  const handleResizeEnd = useCallback(() => {
-    setResizingColumn(null)
-  }, [])
+  const handleDragStart = (event: any) => {
+    const { active } = event
+    setActiveId(active.id)
 
-  useEffect(() => {
-    if (resizingColumn) {
-      document.addEventListener("mousemove", handleResizeMove)
-      document.addEventListener("mouseup", handleResizeEnd)
-      return () => {
-        document.removeEventListener("mousemove", handleResizeMove)
-        document.removeEventListener("mouseup", handleResizeEnd)
-      }
+    // Determine if we're dragging a column or row
+    if (columns.includes(active.id)) {
+      setDragType("column")
+    } else {
+      setDragType("row")
     }
-  }, [resizingColumn, handleResizeMove, handleResizeEnd])
-
-  const handleColumnDoubleClick = (column: string) => {
-    // Calculate optimal width based on content and header
-    let maxWidth = getMinColumnWidth(column)
-
-    entries.forEach((entry) => {
-      const cellValue = getEntryValue(entry, column)
-      const contentWidth = cellValue.length * 8 + 40
-      maxWidth = Math.max(maxWidth, contentWidth)
-    })
-
-    setColumnWidths((prev) => ({
-      ...prev,
-      [column]: Math.min(maxWidth, 400),
-    }))
   }
 
-  const handleSelectAll = (selected: boolean) => {
-    onSelectAll(selected)
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) {
+      setActiveId(null)
+      setDragType(null)
+      return
+    }
+
+    if (dragType === "column") {
+      const oldIndex = columns.indexOf(active.id)
+      const newIndex = columns.indexOf(over.id)
+      const newColumns = arrayMove(columns, oldIndex, newIndex)
+      onColumnsReorder(newColumns)
+    } else if (dragType === "row") {
+      const oldIndex = entries.findIndex((entry) => entry.id === active.id)
+      const newIndex = entries.findIndex((entry) => entry.id === over.id)
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newEntries = arrayMove(entries, oldIndex, newIndex).map((entry, index) => ({
+          ...entry,
+          position: index + 1,
+        }))
+        onEntriesReorder(newEntries)
+      }
+    }
+
+    setActiveId(null)
+    setDragType(null)
   }
 
   const handleBulkDelete = async () => {
-    if (selectedEntries.size > 0) {
-      setBulkDeleteConfirm(true)
+    if (selectedEntries.size === 0 || !onBulkDelete) return
+
+    const confirmed = window.confirm(`Are you sure you want to delete ${selectedEntries.size} selected songs?`)
+    if (confirmed) {
+      await onBulkDelete(Array.from(selectedEntries))
     }
   }
 
-  const confirmBulkDelete = async () => {
-    await onBulkDelete(Array.from(selectedEntries))
-    setBulkDeleteConfirm(false)
-  }
-
-  const allSelected = entries.length > 0 && entries.every((entry) => selectedEntries.has(Number(entry.id)))
-  const someSelected = selectedEntries.size > 0 && !allSelected
+  const allSelected = entries.length > 0 && selectedEntries.size === entries.length
+  const someSelected = selectedEntries.size > 0 && selectedEntries.size < entries.length
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="border rounded-lg overflow-hidden bg-white flex-1 flex flex-col relative z-10">
-        <div ref={tableRef} className="overflow-auto flex-1">
-          <div className="min-w-full">
-            {/* Header */}
-            <div className="bg-gray-50 border-b flex sticky top-0 z-20">
-              {/* Checkbox column header */}
-              <div className="w-12 p-2 border-r bg-gray-50 flex items-center justify-center flex-shrink-0">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={handleSelectAll}
-                  ref={(el) => {
-                    if (el) {
-                      el.indeterminate = someSelected
-                    }
-                  }}
-                />
-              </div>
-
-              {/* Drag handle column header */}
-              <div className="w-12 p-2 border-r bg-gray-50 flex-shrink-0"></div>
-
-              {columns.map((column) => (
-                <div
-                  key={column}
-                  className={cn(
-                    "relative border-r bg-gray-50 flex items-center group flex-shrink-0",
-                    draggedColumn === column && "opacity-50",
-                  )}
-                  style={{
-                    width: columnWidths[column] || getMinColumnWidth(column),
-                    minWidth: columnWidths[column] || getMinColumnWidth(column),
-                  }}
-                  draggable
-                  onDragStart={(e) => handleColumnDragStart(e, column)}
-                  onDragOver={handleColumnDragOver}
-                  onDrop={(e) => handleColumnDrop(e, column)}
-                  onDoubleClick={() => handleColumnDoubleClick(column)}
-                >
-                  <div className="flex-1 p-2 min-w-0">
-                    {editingHeader === column ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          value={tempValue}
-                          onChange={(e) => setTempValue(e.target.value)}
-                          className="h-6 text-xs"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleHeaderSave()
-                            if (e.key === "Escape") handleHeaderCancel()
-                          }}
-                          autoFocus
-                        />
-                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleHeaderSave}>
-                          <Check className="h-3 w-3" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleHeaderCancel}>
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 min-w-0">
-                        <span className="font-medium text-xs text-gray-700 truncate flex-1" title={column}>
-                          {column}
-                        </span>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-5 w-5 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleHeaderEdit(column, column)
-                            }}
-                          >
-                            <Edit2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Resize handle */}
-                  <div
-                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 transition-colors flex-shrink-0"
-                    onMouseDown={(e) => handleResizeStart(e, column)}
-                  />
-                </div>
-              ))}
-
-              {/* Add column button */}
-              <div className="w-12 p-2 bg-gray-50 flex items-center justify-center flex-shrink-0">
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={onAddColumn}>
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Delete button row - only show when items are selected */}
-            {selectedEntries.size > 0 && (
-              <div className="bg-blue-50 border-b flex items-center justify-center py-2">
-                <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="flex items-center gap-2">
-                  <Trash2 className="h-4 w-4" />
-                  Delete Selected ({selectedEntries.size})
-                </Button>
-              </div>
-            )}
-
-            {/* Rows */}
-            {entries.map((entry) => (
-              <SortableRow
-                key={entry.id}
-                entry={entry}
-                columns={columns}
-                columnWidths={columnWidths}
-                getMinColumnWidth={getMinColumnWidth}
-                getEntryValue={getEntryValue}
-                selectedEntries={selectedEntries}
-                onSelectEntry={onSelectEntry}
-                draggedRow={draggedRow}
-                editingCell={editingCell}
-                tempValue={tempValue}
-                setTempValue={setTempValue}
-                handleCellEdit={handleCellEdit}
-                handleCellSave={handleCellSave}
-                handleCellCancel={handleCellCancel}
-                handleRowDragStart={handleRowDragStart}
-                handleRowDragOver={handleRowDragOver}
-                handleRowDrop={handleRowDrop}
-              />
-            ))}
+    <div className="space-y-4">
+      {/* Bulk Actions Bar */}
+      {showBulkActions && selectedEntries.size > 0 && (
+        <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+              {selectedEntries.size} selected
+            </Badge>
+            <span className="text-sm text-blue-700 dark:text-blue-300">
+              {selectedEntries.size === 1 ? "1 song selected" : `${selectedEntries.size} songs selected`}
+            </span>
           </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onSelectAll?.(false)}
+              className="text-blue-700 border-blue-200 hover:bg-blue-100 dark:text-blue-300 dark:border-blue-700 dark:hover:bg-blue-900"
+            >
+              Clear Selection
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete Selected
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Spreadsheet */}
+      <div className="border rounded-lg overflow-hidden bg-background">
+        <div className="overflow-auto max-h-[70vh]">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            modifiers={dragType === "column" ? [restrictToHorizontalAxis] : []}
+          >
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableRow className="border-b-2 border-border hover:bg-transparent">
+                  {/* Selection header */}
+                  {showBulkActions && onSelectAll && (
+                    <TableHead className="w-12 p-2 bg-muted/50">
+                      <Checkbox
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someSelected
+                        }}
+                        onCheckedChange={(checked) => onSelectAll(checked as boolean)}
+                      />
+                    </TableHead>
+                  )}
+
+                  {/* Drag handle header */}
+                  <TableHead className="w-12 p-2 bg-muted/50">
+                    <GripVertical className="h-4 w-4 opacity-40" />
+                  </TableHead>
+
+                  {/* Column headers */}
+                  <SortableContext items={columns} strategy={horizontalListSortingStrategy}>
+                    {columns.map((column) => (
+                      <SortableHeader
+                        key={column}
+                        column={column}
+                        onEdit={onHeaderEdit}
+                        isNarrow={NARROW_COLUMNS.has(column.toLowerCase())}
+                      />
+                    ))}
+                  </SortableContext>
+
+                  {/* Add column button */}
+                  <TableHead className="w-16 p-2 bg-muted/50">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onAddColumn}
+                      className="h-7 w-7 p-0 opacity-60 hover:opacity-100 transition-opacity"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </TableHead>
+
+                  {/* Actions header */}
+                  <TableHead className="w-16 p-2 bg-muted/50">
+                    <span className="text-xs opacity-60">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                <SortableContext items={entries.map((e) => e.id)}>
+                  {entries.map((entry) => (
+                    <SortableRow
+                      key={entry.id}
+                      entry={entry}
+                      columns={columns}
+                      onCellEdit={onCellEdit}
+                      onDeleteEntry={onDeleteEntry}
+                      getEntryValue={getEntryValue}
+                      isSelected={selectedEntries.has(Number(entry.id))}
+                      onSelectEntry={onSelectEntry}
+                    />
+                  ))}
+                </SortableContext>
+              </TableBody>
+            </Table>
+          </DndContext>
         </div>
       </div>
 
-      {/* Bulk Delete Confirmation Dialog */}
-      <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Multiple Entries</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedEntries.size} {selectedEntries.size === 1 ? "entry" : "entries"}?
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmBulkDelete} className="bg-red-600 hover:bg-red-700">
-              Delete {selectedEntries.size} {selectedEntries.size === 1 ? "Entry" : "Entries"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {entries.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          <Music className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-lg font-medium mb-2">No songs found</p>
+          <p className="text-sm">Upload a CSV or Excel file to get started</p>
+        </div>
+      )}
     </div>
   )
 }
