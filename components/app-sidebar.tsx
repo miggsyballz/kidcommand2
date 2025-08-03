@@ -1,177 +1,91 @@
 "use client"
 
 import type * as React from "react"
-import {
-  AudioWaveform,
-  Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
-  Map,
-  PieChart,
-  Settings2,
-  Music,
-  Library,
-  Calendar,
-  Home,
-} from "lucide-react"
+import { BookOpen, Bot, GalleryVerticalEnd, Settings2, SquareTerminal, PanelLeft, LogOut } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
-import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail, useSidebar } from "@/components/ui/sidebar"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { Button } from "@/components/ui/button"
 
 // This is sample data.
 const data = {
   user: {
-    name: "Mr. Mig",
-    email: "mig@kidcommand.com",
-    avatar: "/placeholder-user.jpg",
+    name: "Mig",
+    email: "mig@maxxbeats.com",
+    avatar: "/avatars/shadcn.jpg",
   },
   teams: [
     {
-      name: "Kid Command",
+      name: "Music Matrix",
       logo: GalleryVerticalEnd,
       plan: "Enterprise",
-    },
-    {
-      name: "Music Matrix",
-      logo: AudioWaveform,
-      plan: "Startup",
-    },
-    {
-      name: "Acme Corp.",
-      logo: Command,
-      plan: "Free",
     },
   ],
   navMain: [
     {
       title: "Dashboard",
       url: "/dashboard",
-      icon: Home,
-      isActive: true,
+      icon: SquareTerminal,
     },
     {
       title: "Library",
       url: "/library",
-      icon: Library,
-      items: [
-        {
-          title: "All Songs",
-          url: "/library",
-        },
-        {
-          title: "Upload Data",
-          url: "/library#upload",
-        },
-      ],
-    },
-    {
-      title: "Playlists",
-      url: "/playlists",
-      icon: Music,
-      items: [
-        {
-          title: "All Playlists",
-          url: "/playlists",
-        },
-        {
-          title: "Create New",
-          url: "/playlists/new",
-        },
-      ],
+      icon: BookOpen,
     },
     {
       title: "Scheduling",
-      url: "/scheduling",
-      icon: Calendar,
-      items: [
-        {
-          title: "View Schedules",
-          url: "/scheduling",
-        },
-        {
-          title: "Create Schedule",
-          url: "/scheduling/new",
-        },
-      ],
-    },
-    {
-      title: "AI Assistant",
-      url: "/ai-assistant",
+      url: "/playlists",
       icon: Bot,
-      items: [
-        {
-          title: "Chat Assistant",
-          url: "/ai-assistant",
-        },
-        {
-          title: "Voice Assistant",
-          url: "/ai-assistant/voice",
-        },
-        {
-          title: "Brain Hub",
-          url: "/ai-assistant/brain",
-        },
-      ],
     },
     {
-      title: "Tools",
-      url: "#",
+      title: "Settings",
+      url: "/settings",
       icon: Settings2,
-      items: [
-        {
-          title: "Upload Data",
-          url: "/upload-data",
-        },
-        {
-          title: "Prompt Builder",
-          url: "/prompt-builder",
-        },
-        {
-          title: "Entries Editor",
-          url: "/entries-editor",
-        },
-      ],
-    },
-  ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
     },
   ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { toggleSidebar, state } = useSidebar()
+
+  const handleLogout = () => {
+    localStorage.removeItem("isAuthenticated")
+    window.location.href = "/splash"
+  }
+
+  const isCollapsed = state === "collapsed"
+
   return (
     <Sidebar
       collapsible="icon"
+      className="transition-[width] duration-300 ease-in-out bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-r"
       {...props}
-      className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-r"
     >
       <SidebarHeader className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <TeamSwitcher teams={data.teams} />
+        <div className="flex items-center justify-between p-2">
+          {!isCollapsed && (
+            <div className="flex items-center gap-2">
+              <img src="/music-matrix-logo.png" alt="Music Matrix Logo" className="h-20 w-auto" />
+            </div>
+          )}
+          <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8 ml-auto">
+            <PanelLeft className="h-4 w-4" />
+            <span className="sr-only">Toggle Sidebar</span>
+          </Button>
+        </div>
       </SidebarHeader>
       <SidebarContent className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <NavUser user={data.user} />
+        <div className="flex items-center justify-center gap-2 p-2">
+          <ThemeToggle />
+          <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8">
+            <LogOut className="h-4 w-4" />
+            <span className="sr-only">Logout</span>
+          </Button>
+        </div>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
