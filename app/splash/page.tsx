@@ -1,100 +1,65 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Music, Radio, Mic, Settings, Zap, Users } from "lucide-react"
+import { Music, Radio, Headphones } from "lucide-react"
 
 export default function SplashPage() {
   const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleEnter = () => {
+  const handleEnter = async () => {
+    setIsLoading(true)
+
+    // Simulate authentication
     localStorage.setItem("isAuthenticated", "true")
+
+    // Navigate to dashboard
     router.push("/dashboard")
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-      <div className="max-w-4xl mx-auto px-6 text-center">
-        {/* Hero Section */}
-        <div className="mb-12">
-          <div className="flex items-center justify-center mb-6">
-            <div className="bg-blue-600 p-3 rounded-full">
-              <Music className="h-8 w-8 text-white" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
+      <Card className="w-full max-w-md mx-auto bg-white/10 backdrop-blur-md border-white/20">
+        <CardHeader className="text-center space-y-4">
+          <div className="mx-auto w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+            <Music className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-3xl font-bold text-white mb-2">Music Matrix</CardTitle>
+            <CardDescription className="text-white/80 text-lg">Professional Radio Scheduling Interface</CardDescription>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-2 gap-4 text-center">
+            <div className="space-y-2">
+              <div className="mx-auto w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center">
+                <Radio className="w-6 h-6 text-white" />
+              </div>
+              <p className="text-white/90 text-sm font-medium">Smart Scheduling</p>
+            </div>
+            <div className="space-y-2">
+              <div className="mx-auto w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center">
+                <Headphones className="w-6 h-6 text-white" />
+              </div>
+              <p className="text-white/90 text-sm font-medium">AI Assistant</p>
             </div>
           </div>
-          <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">Music Matrix</h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
-            Professional Radio Scheduling & Music Management Platform
-          </p>
+
           <Button
             onClick={handleEnter}
-            size="lg"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+            disabled={isLoading}
+            className="w-full bg-white text-purple-900 hover:bg-white/90 font-semibold py-3 text-lg"
           >
-            Enter Music Matrix
+            {isLoading ? "Loading..." : "Enter Music Matrix"}
           </Button>
-        </div>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-3 gap-6 mb-12">
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
-            <CardHeader>
-              <div className="bg-green-100 p-2 rounded-full w-fit mx-auto mb-2">
-                <Radio className="h-6 w-6 text-green-600" />
-              </div>
-              <CardTitle className="text-lg">Smart Scheduling</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                AI-powered playlist generation and intelligent music scheduling for radio stations
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
-            <CardHeader>
-              <div className="bg-purple-100 p-2 rounded-full w-fit mx-auto mb-2">
-                <Mic className="h-6 w-6 text-purple-600" />
-              </div>
-              <CardTitle className="text-lg">Voice Assistant</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>Voice-controlled music management and hands-free playlist creation</CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
-            <CardHeader>
-              <div className="bg-orange-100 p-2 rounded-full w-fit mx-auto mb-2">
-                <Settings className="h-6 w-6 text-orange-600" />
-              </div>
-              <CardTitle className="text-lg">Advanced Controls</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Comprehensive music library management with advanced filtering and organization
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Bottom Features */}
-        <div className="flex items-center justify-center space-x-8 text-gray-600 dark:text-gray-400">
-          <div className="flex items-center space-x-2">
-            <Zap className="h-5 w-5" />
-            <span>Lightning Fast</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Users className="h-5 w-5" />
-            <span>Multi-User</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Music className="h-5 w-5" />
-            <span>Professional Grade</span>
-          </div>
-        </div>
-      </div>
+          <p className="text-center text-white/60 text-sm">Welcome to your professional radio scheduling platform</p>
+        </CardContent>
+      </Card>
     </div>
   )
 }

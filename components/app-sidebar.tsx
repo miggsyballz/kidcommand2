@@ -74,10 +74,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar collapsible="icon" className="transition-[width] duration-300 ease-in-out" {...props}>
       <SidebarHeader>
         <div className="flex items-center justify-between p-2">
-          <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8">
-            <PanelLeft className="h-4 w-4" />
-            <span className="sr-only">Toggle Sidebar</span>
-          </Button>
           {!isCollapsed && (
             <div className="flex items-center gap-2">
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
@@ -89,6 +85,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </div>
             </div>
           )}
+          <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8 ml-auto">
+            <PanelLeft className="h-4 w-4" />
+            <span className="sr-only">Toggle Sidebar</span>
+          </Button>
         </div>
       </SidebarHeader>
       <SidebarContent>
