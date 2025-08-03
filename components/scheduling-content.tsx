@@ -29,6 +29,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Grid, List, Trash2, Eye, Save, Send, Bot, Clock, Music, Calendar } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
+import { SortableSpreadsheet } from "./sortable-spreadsheet"
+import { getCellDisplayValue } from "@/lib/duration-utils"
 
 interface Playlist {
   id: string
@@ -36,6 +38,16 @@ interface Playlist {
   description?: string
   song_count: number
   total_duration: string
+  created_at: string
+  column_structure?: string
+}
+
+interface PlaylistEntry {
+  id: number
+  data: Record<string, any>
+  playlist_id?: number
+  source_file?: string
+  position: number
   created_at: string
 }
 
@@ -61,6 +73,9 @@ export function SchedulingContent() {
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards")
   const [loading, setLoading] = useState(true)
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null)
+  const [playlistEntries, setPlaylistEntries] = useState<PlaylistEntry[]>([])
+  const [columns, setColumns] = useState<string[]>([])
+  const [entriesLoading, setEntriesLoading] = useState(false)
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([
     {
       id: "1",
@@ -87,6 +102,83 @@ export function SchedulingContent() {
       toast.error("Failed to load playlists")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchPlaylistEntries = async (playlistId: string) => {
+    try {
+      setEntriesLoading(true)
+
+      const { data: entriesData, error: entriesError } = await supabase
+        .from("playlist_entries")
+        .select("id, data, playlist_id, source_file, position, created_at")
+        .eq("playlist_id", playlistId)
+        .order("position", { ascending: true })
+
+      if (entriesError) throw entriesError
+
+      // Process entries
+      const processedEntries = (entriesData || [])
+        .filter((entry) => {
+          if (!entry.data || typeof entry.data !== "object") {
+            console.warn("Filtering out entry with invalid data:", entry)
+            return false
+          }
+          return true
+        })
+        .map((entry) => {
+          let data = entry.data
+          if (typeof data === "string") {
+            try {
+              data = JSON.parse(data)
+            } catch (e) {
+              console.warn("Failed to parse entry data:", entry.id, e)
+              return null
+            }
+          }
+          return { ...entry, data, position: entry.position || 0 }
+        })
+        .filter(Boolean) as PlaylistEntry[]
+
+      setPlaylistEntries(processedEntries)
+
+      // Extract columns
+      const allColumns = new Set<string>()
+      processedEntries.forEach((entry) => {
+        if (entry.data && typeof entry.data === "object") {
+          Object.keys(entry.data).forEach((key) => {
+            if (key && key.trim()) {
+              allColumns.add(key)
+            }
+          })
+        }
+      })
+
+      // Try to get column structure from playlist
+      const playlist = playlists.find((p) => p.id === playlistId)
+      let columnsToUse: string[] = []
+
+      if (playlist?.column_structure) {
+        try {
+          const parsedStructure = JSON.parse(playlist.column_structure)
+          if (Array.isArray(parsedStructure)) {
+            columnsToUse = parsedStructure
+          }
+        } catch (e) {
+          console.warn("Failed to parse column_structure:", e)
+        }
+      }
+
+      if (columnsToUse.length === 0) {
+        columnsToUse = Array.from(allColumns).sort()
+      }
+
+      setColumns(columnsToUse)
+    } catch (error) {
+      console.error("Error fetching playlist entries:", error)
+      toast.error("Failed to load playlist entries")
+    } finally {
+      setEntriesLoading(false)
     }
   }
 
@@ -158,18 +250,37 @@ export function SchedulingContent() {
 
   const handleSaveSchedule = async (schedule: any) => {
     try {
-      const { data, error } = await supabase
+      // Create playlist
+      const { data: playlist, error: playlistError } = await supabase
         .from("playlists")
         .insert({
           name: schedule.title,
           description: `AI-generated ${schedule.duration} schedule`,
           song_count: schedule.songs.length,
           total_duration: schedule.duration,
+          column_structure: JSON.stringify(["Title", "Artist", "Runs", "Start Time", "End Time"]),
         })
         .select()
         .single()
 
-      if (error) throw error
+      if (playlistError) throw playlistError
+
+      // Create playlist entries
+      const entries = schedule.songs.map((song: any, index: number) => ({
+        playlist_id: playlist.id,
+        position: index + 1,
+        data: {
+          Title: song.title,
+          Artist: song.artist,
+          Runs: song.duration,
+          "Start Time": song.start_time,
+          "End Time": song.end_time,
+        },
+      }))
+
+      const { error: entriesError } = await supabase.from("playlist_entries").insert(entries)
+
+      if (entriesError) throw entriesError
 
       toast.success("Schedule saved as playlist!")
       fetchPlaylists()
@@ -199,9 +310,169 @@ export function SchedulingContent() {
 
       toast.success("Playlist deleted successfully")
       fetchPlaylists()
+
+      // Close dialog if the deleted playlist was selected
+      if (selectedPlaylist?.id === id) {
+        setSelectedPlaylist(null)
+      }
     } catch (error) {
       console.error("Error deleting playlist:", error)
       toast.error("Failed to delete playlist")
+    }
+  }
+
+  const handleViewPlaylist = async (playlist: Playlist) => {
+    setSelectedPlaylist(playlist)
+    await fetchPlaylistEntries(playlist.id)
+  }
+
+  // Spreadsheet handlers
+  const getEntryValue = (entry: PlaylistEntry, column: string): string => {
+    if (!entry.data || typeof entry.data !== "object") {
+      return "-"
+    }
+    const value = entry.data[column]
+    return getCellDisplayValue(value, column)
+  }
+
+  const handleEntriesReorder = async (newEntries: PlaylistEntry[]) => {
+    setPlaylistEntries(newEntries)
+
+    try {
+      const updates = newEntries.map((entry) => ({
+        id: entry.id,
+        position: entry.position,
+        playlist_id: entry.playlist_id,
+      }))
+
+      const { error } = await supabase.from("playlist_entries").upsert(updates, { onConflict: "id" })
+
+      if (error) throw error
+    } catch (err) {
+      console.error("Error updating entry positions:", err)
+      toast.error("Failed to update entry order")
+    }
+  }
+
+  const handleColumnsReorder = async (newColumns: string[]) => {
+    setColumns(newColumns)
+
+    try {
+      if (selectedPlaylist) {
+        await supabase
+          .from("playlists")
+          .update({ column_structure: JSON.stringify(newColumns) })
+          .eq("id", selectedPlaylist.id)
+      }
+    } catch (err) {
+      console.error("Error updating column order:", err)
+      toast.error("Failed to update column order")
+    }
+  }
+
+  const handleCellEdit = async (entryId: string, column: string, value: any) => {
+    try {
+      const entry = playlistEntries.find((e) => e.id === Number(entryId))
+      if (!entry) return
+
+      const updatedData = {
+        ...entry.data,
+        [column]: value,
+      }
+
+      const { error } = await supabase.from("playlist_entries").update({ data: updatedData }).eq("id", entryId)
+
+      if (error) throw error
+
+      // Update local state
+      setPlaylistEntries((prev) => prev.map((e) => (e.id === Number(entryId) ? { ...e, data: updatedData } : e)))
+    } catch (err) {
+      console.error("Error updating cell:", err)
+      throw err
+    }
+  }
+
+  const handleHeaderEdit = async (oldColumn: string, newColumn: string) => {
+    try {
+      // Update all entries to rename the column
+      const updates = playlistEntries.map(async (entry) => {
+        if (!entry.data || typeof entry.data !== "object") return
+
+        const newData = { ...entry.data }
+        if (oldColumn in newData) {
+          newData[newColumn] = newData[oldColumn]
+          delete newData[oldColumn]
+
+          const { error } = await supabase.from("playlist_entries").update({ data: newData }).eq("id", entry.id)
+
+          if (error) throw error
+        }
+      })
+
+      await Promise.all(updates)
+
+      // Update local state
+      setColumns((prev) => prev.map((col) => (col === oldColumn ? newColumn : col)))
+
+      setPlaylistEntries((prev) =>
+        prev.map((entry) => {
+          if (!entry.data || typeof entry.data !== "object") return entry
+          const newData = { ...entry.data }
+          if (oldColumn in newData) {
+            newData[newColumn] = newData[oldColumn]
+            delete newData[oldColumn]
+          }
+          return { ...entry, data: newData }
+        }),
+      )
+
+      // Update column structure
+      if (selectedPlaylist) {
+        const newColumns = columns.map((col) => (col === oldColumn ? newColumn : col))
+        await supabase
+          .from("playlists")
+          .update({ column_structure: JSON.stringify(newColumns) })
+          .eq("id", selectedPlaylist.id)
+      }
+    } catch (err) {
+      console.error("Error updating header:", err)
+      throw err
+    }
+  }
+
+  const handleDeleteEntry = async (entryId: string) => {
+    try {
+      const { error } = await supabase.from("playlist_entries").delete().eq("id", entryId)
+
+      if (error) throw error
+
+      setPlaylistEntries((prev) => prev.filter((e) => e.id !== Number(entryId)))
+      toast.success("Entry deleted successfully")
+    } catch (err) {
+      console.error("Error deleting entry:", err)
+      toast.error("Failed to delete entry")
+    }
+  }
+
+  const handleAddColumn = async () => {
+    const columnName = prompt("Enter new column name:")
+    if (!columnName || !columnName.trim()) return
+
+    const trimmedName = columnName.trim()
+    if (columns.includes(trimmedName)) {
+      alert("Column already exists!")
+      return
+    }
+
+    const newColumns = [...columns, trimmedName].sort()
+    setColumns(newColumns)
+
+    // Update column structure
+    if (selectedPlaylist) {
+      await supabase
+        .from("playlists")
+        .update({ column_structure: JSON.stringify(newColumns) })
+        .eq("id", selectedPlaylist.id)
     }
   }
 
@@ -432,9 +703,10 @@ export function SchedulingContent() {
                       <Button
                         className="w-full mt-4 bg-transparent"
                         variant="outline"
-                        onClick={() => (window.location.href = `/playlists/${playlist.id}/edit`)}
+                        onClick={() => handleViewPlaylist(playlist)}
                       >
-                        Edit Schedule
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Schedule
                       </Button>
                     </CardContent>
                   </Card>
@@ -449,7 +721,7 @@ export function SchedulingContent() {
                         <div className="space-y-1">
                           <button
                             className="text-left hover:underline font-medium"
-                            onClick={() => (window.location.href = `/playlists/${playlist.id}/edit`)}
+                            onClick={() => handleViewPlaylist(playlist)}
                           >
                             {playlist.name}
                           </button>
@@ -490,6 +762,60 @@ export function SchedulingContent() {
           </>
         )}
       </div>
+
+      {/* Playlist Detail Dialog with Editable Spreadsheet */}
+      {selectedPlaylist && (
+        <Dialog open={!!selectedPlaylist} onOpenChange={() => setSelectedPlaylist(null)}>
+          <DialogContent className="max-w-7xl max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Music className="h-5 w-5" />
+                {selectedPlaylist.name}
+              </DialogTitle>
+              <DialogDescription>
+                {selectedPlaylist.description} • {playlistEntries.length} entries
+              </DialogDescription>
+            </DialogHeader>
+
+            {entriesLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading schedule entries...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {playlistEntries.length > 0 ? (
+                  <SortableSpreadsheet
+                    entries={playlistEntries.map((entry) => ({
+                      id: entry.id.toString(),
+                      data: entry.data,
+                      position: entry.position,
+                      created_at: entry.created_at,
+                      playlist_id: entry.playlist_id,
+                    }))}
+                    columns={columns}
+                    onEntriesReorder={handleEntriesReorder}
+                    onColumnsReorder={handleColumnsReorder}
+                    onCellEdit={handleCellEdit}
+                    onHeaderEdit={handleHeaderEdit}
+                    onDeleteEntry={handleDeleteEntry}
+                    onAddColumn={handleAddColumn}
+                    getEntryValue={(entry, column) => getEntryValue(entry as any, column)}
+                  />
+                ) : (
+                  <div className="text-center py-12">
+                    <Music className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No entries in this schedule</h3>
+                    <p className="text-muted-foreground">This schedule doesn't have any songs yet.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }
