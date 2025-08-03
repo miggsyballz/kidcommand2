@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { List, Trash2, Save, Send, Bot, Music, Calendar, X, ArrowLeft } from "lucide-react"
+import { List, Grid, Trash2, Save, Send, Bot, Music, Calendar, X, ArrowLeft, Clock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { SortableSpreadsheet } from "./sortable-spreadsheet"
@@ -61,7 +61,7 @@ interface AIMessage {
 
 export function SchedulingContent() {
   const [playlists, setPlaylists] = useState<Playlist[]>([])
-  const [viewMode, setViewMode] = useState<"cards" | "list">("list")
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards")
   const [loading, setLoading] = useState(true)
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null)
   const [playlistEntries, setPlaylistEntries] = useState<PlaylistEntry[]>([])
@@ -615,13 +615,22 @@ export function SchedulingContent() {
                 <h1 className="text-xl font-bold">Your Schedules</h1>
                 <p className="text-sm text-muted-foreground">Manage your saved playlists and schedules</p>
               </div>
-              <Button
-                variant={viewMode === "list" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-              >
-                <List className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={viewMode === "cards" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("cards")}
+                >
+                  <Grid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -683,66 +692,133 @@ export function SchedulingContent() {
                 </div>
               ) : (
                 <div className="p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {playlists.map((playlist) => (
-                      <Card
-                        key={playlist.id}
-                        className="cursor-pointer hover:shadow-md transition-shadow"
-                        onClick={() => handleViewPlaylist(playlist)}
-                      >
-                        <CardHeader className="pb-3">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <CardTitle className="text-lg truncate">{playlist.name}</CardTitle>
-                              {playlist.description && (
-                                <p className="text-sm text-muted-foreground mt-1 truncate">{playlist.description}</p>
-                              )}
+                  {viewMode === "cards" ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {playlists.map((playlist) => (
+                        <Card
+                          key={playlist.id}
+                          className="cursor-pointer hover:shadow-md transition-shadow"
+                          onClick={() => handleViewPlaylist(playlist)}
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <CardTitle className="text-lg truncate">{playlist.name}</CardTitle>
+                                {playlist.description && (
+                                  <p className="text-sm text-muted-foreground mt-1 truncate">{playlist.description}</p>
+                                )}
+                              </div>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete "{playlist.name}"? This action cannot be undone
+                                      and will also delete all songs in this playlist.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeletePlaylist(playlist.id)}>
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete "{playlist.name}"? This action cannot be undone and
-                                    will also delete all songs in this playlist.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeletePlaylist(playlist.id)}>
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Music className="h-4 w-4" />
-                              <span>{playlist.song_count} songs</span>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Music className="h-4 w-4" />
+                                <span>{playlist.song_count} songs</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Clock className="h-4 w-4" />
+                                <span>{playlist.total_duration}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Calendar className="h-4 w-4" />
+                                <span>{formatDate(playlist.created_at)}</span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Calendar className="h-4 w-4" />
-                              <span>{formatDate(playlist.created_at)}</span>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <Card>
+                      <CardContent className="p-0">
+                        <div className="divide-y">
+                          {playlists.map((playlist) => (
+                            <div
+                              key={playlist.id}
+                              className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer"
+                              onClick={() => handleViewPlaylist(playlist)}
+                            >
+                              <div className="space-y-1 flex-1 min-w-0">
+                                <h4 className="font-medium text-sm truncate">{playlist.name}</h4>
+                                {playlist.description && (
+                                  <p className="text-xs text-muted-foreground truncate">{playlist.description}</p>
+                                )}
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                  <span className="flex items-center gap-1">
+                                    <Music className="h-3 w-3" />
+                                    {playlist.song_count} songs
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {playlist.total_duration}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {formatDate(playlist.created_at)}
+                                  </span>
+                                </div>
+                              </div>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete "{playlist.name}"? This action cannot be undone
+                                      and will also delete all songs in this playlist.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeletePlaylist(playlist.id)}>
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
-                            <p className="text-sm text-muted-foreground">{playlist.total_duration}</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
             </ScrollArea>
