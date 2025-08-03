@@ -52,7 +52,6 @@ const SortableRow = React.memo(
     getEntryValue,
     selectedEntries,
     onSelectEntry,
-    showBulkActions,
     draggedRow,
     editingCell,
     tempValue,
@@ -63,8 +62,6 @@ const SortableRow = React.memo(
     handleRowDragStart,
     handleRowDragOver,
     handleRowDrop,
-    onDeleteEntry,
-    setDeleteConfirmEntry,
   }: {
     entry: PlaylistEntry
     columns: string[]
@@ -73,7 +70,6 @@ const SortableRow = React.memo(
     getEntryValue: (entry: PlaylistEntry, column: string) => string
     selectedEntries: Set<number>
     onSelectEntry: (entryId: number, checked: boolean) => void
-    showBulkActions: boolean
     draggedRow: string | null
     editingCell: { entryId: string; column: string } | null
     tempValue: string
@@ -84,8 +80,6 @@ const SortableRow = React.memo(
     handleRowDragStart: (e: React.DragEvent, entryId: string) => void
     handleRowDragOver: (e: React.DragEvent) => void
     handleRowDrop: (e: React.DragEvent, targetEntryId: string) => void
-    onDeleteEntry: (entryId: string) => Promise<void>
-    setDeleteConfirmEntry: (entry: PlaylistEntry | null) => void
   }) => {
     return (
       <div
@@ -100,15 +94,13 @@ const SortableRow = React.memo(
         onDrop={(e) => handleRowDrop(e, entry.id)}
       >
         {/* Checkbox column */}
-        {showBulkActions && (
-          <div className="w-12 p-2 border-r flex items-center justify-center flex-shrink-0">
-            <Checkbox
-              checked={selectedEntries.has(Number(entry.id))}
-              onCheckedChange={(checked) => onSelectEntry(Number(entry.id), !!checked)}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        )}
+        <div className="w-12 p-2 border-r flex items-center justify-center flex-shrink-0">
+          <Checkbox
+            checked={selectedEntries.has(Number(entry.id))}
+            onCheckedChange={(checked) => onSelectEntry(Number(entry.id), !!checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
 
         {/* Drag handle */}
         <div className="w-12 p-2 border-r flex items-center justify-center flex-shrink-0">
@@ -162,21 +154,6 @@ const SortableRow = React.memo(
             )}
           </div>
         ))}
-
-        {/* Row actions */}
-        <div className="w-12 p-2 flex items-center justify-center flex-shrink-0">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-5 w-5 p-0 text-red-600 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation()
-              setDeleteConfirmEntry(entry)
-            }}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        </div>
       </div>
     )
   },
@@ -209,7 +186,6 @@ export function SortableSpreadsheet({
   const [resizeStartWidth, setResizeStartWidth] = useState(0)
   const [tempValue, setTempValue] = useState("")
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
-  const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<PlaylistEntry | null>(null)
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const tableRef = useRef<HTMLDivElement>(null)
 
@@ -408,55 +384,28 @@ export function SortableSpreadsheet({
     setBulkDeleteConfirm(false)
   }
 
-  const confirmSingleDelete = async () => {
-    if (deleteConfirmEntry) {
-      await onDeleteEntry(deleteConfirmEntry.id)
-      setDeleteConfirmEntry(null)
-    }
-  }
-
   const allSelected = entries.length > 0 && entries.every((entry) => selectedEntries.has(Number(entry.id)))
   const someSelected = selectedEntries.size > 0 && !allSelected
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Bulk Actions Bar */}
-      {showBulkActions && selectedEntries.size > 0 && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
-          <span className="text-sm font-medium text-blue-900">
-            {selectedEntries.size} {selectedEntries.size === 1 ? "entry" : "entries"} selected
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleSelectAll(false)}>
-              Clear Selection
-            </Button>
-            <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
-              <Trash2 className="h-4 w-4 mr-1" />
-              Delete Selected
-            </Button>
-          </div>
-        </div>
-      )}
-
       <div className="border rounded-lg overflow-hidden bg-white flex-1 flex flex-col relative z-10">
         <div ref={tableRef} className="overflow-auto flex-1">
           <div className="min-w-full">
             {/* Header */}
             <div className="bg-gray-50 border-b flex sticky top-0 z-20">
               {/* Checkbox column header */}
-              {showBulkActions && (
-                <div className="w-12 p-2 border-r bg-gray-50 flex items-center justify-center flex-shrink-0">
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={handleSelectAll}
-                    ref={(el) => {
-                      if (el) {
-                        el.indeterminate = someSelected
-                      }
-                    }}
-                  />
-                </div>
-              )}
+              <div className="w-12 p-2 border-r bg-gray-50 flex items-center justify-center flex-shrink-0">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={handleSelectAll}
+                  ref={(el) => {
+                    if (el) {
+                      el.indeterminate = someSelected
+                    }
+                  }}
+                />
+              </div>
 
               {/* Drag handle column header */}
               <div className="w-12 p-2 border-r bg-gray-50 flex-shrink-0"></div>
@@ -536,6 +485,16 @@ export function SortableSpreadsheet({
               </div>
             </div>
 
+            {/* Delete button row - only show when items are selected */}
+            {selectedEntries.size > 0 && (
+              <div className="bg-blue-50 border-b flex items-center justify-center py-2">
+                <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="flex items-center gap-2">
+                  <Trash2 className="h-4 w-4" />
+                  Delete Selected ({selectedEntries.size})
+                </Button>
+              </div>
+            )}
+
             {/* Rows */}
             {entries.map((entry) => (
               <SortableRow
@@ -547,7 +506,6 @@ export function SortableSpreadsheet({
                 getEntryValue={getEntryValue}
                 selectedEntries={selectedEntries}
                 onSelectEntry={onSelectEntry}
-                showBulkActions={showBulkActions}
                 draggedRow={draggedRow}
                 editingCell={editingCell}
                 tempValue={tempValue}
@@ -558,36 +516,11 @@ export function SortableSpreadsheet({
                 handleRowDragStart={handleRowDragStart}
                 handleRowDragOver={handleRowDragOver}
                 handleRowDrop={handleRowDrop}
-                onDeleteEntry={onDeleteEntry}
-                setDeleteConfirmEntry={setDeleteConfirmEntry}
               />
             ))}
           </div>
         </div>
       </div>
-
-      {/* Single Delete Confirmation Dialog */}
-      <AlertDialog open={!!deleteConfirmEntry} onOpenChange={() => setDeleteConfirmEntry(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Entry</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this entry? This action cannot be undone.
-              {deleteConfirmEntry && (
-                <div className="mt-2 p-2 bg-gray-50 rounded text-sm">
-                  <strong>Entry:</strong> {getEntryValue(deleteConfirmEntry, columns[0] || "id")}
-                </div>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmSingleDelete} className="bg-red-600 hover:bg-red-700">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Bulk Delete Confirmation Dialog */}
       <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>

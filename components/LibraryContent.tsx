@@ -4,10 +4,9 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Music, AlertCircle, Upload, CheckCircle2, FileText, X, Info, Trash2 } from "lucide-react"
+import { Music, AlertCircle, Upload, CheckCircle2, FileText, X, Info } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -16,16 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { supabase } from "@/lib/supabase"
 import { useRef } from "react"
 import { SortableSpreadsheet } from "./sortable-spreadsheet"
@@ -460,18 +449,14 @@ export function LibraryContent() {
     }
   }
 
-  const handleBulkDelete = async () => {
-    if (selectedSongs.size === 0) return
-
+  const handleBulkDelete = async (songIds: number[]) => {
     try {
-      const songIds = Array.from(selectedSongs)
       const { error } = await supabase.from("playlist_entries").delete().in("id", songIds)
 
       if (error) throw error
 
-      setSongs((prev) => prev.filter((song) => !selectedSongs.has(song.id)))
+      setSongs((prev) => prev.filter((song) => !songIds.includes(song.id)))
       setSelectedSongs(new Set())
-      setShowBulkDeleteDialog(false)
       setUploadSuccess(`Successfully deleted ${songIds.length} songs.`)
 
       setTimeout(() => setUploadSuccess(null), 3000)
@@ -584,24 +569,6 @@ export function LibraryContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Bulk Delete Confirmation Dialog */}
-      <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Selected Songs</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedSongs.size} selected songs? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">
-              Delete {selectedSongs.size} Songs
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -614,17 +581,6 @@ export function LibraryContent() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {selectedSongs.size > 0 && (
-            <Button
-              onClick={() => setShowBulkDeleteDialog(true)}
-              variant="destructive"
-              size="sm"
-              className="flex items-center gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Selected ({selectedSongs.size})
-            </Button>
-          )}
           <Button onClick={fetchData} variant="outline" size="sm">
             Refresh
           </Button>
@@ -729,7 +685,7 @@ export function LibraryContent() {
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex justify-center">
             <Button onClick={handleUpload} disabled={isUploading || !csvData.length} size="lg" className="min-w-40">
               {isUploading ? (
                 <>
@@ -750,20 +706,9 @@ export function LibraryContent() {
       {/* Library Spreadsheet with Bulk Selection */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Music className="h-5 w-5" />
-              All Songs ({songs.length})
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={selectedSongs.size === songs.length && songs.length > 0}
-                  onCheckedChange={handleSelectAll}
-                />
-                <span className="text-sm text-muted-foreground">Select All</span>
-              </div>
-            </div>
+          <CardTitle className="flex items-center gap-2">
+            <Music className="h-5 w-5" />
+            All Songs ({songs.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -786,6 +731,8 @@ export function LibraryContent() {
             selectedEntries={selectedSongs}
             onSelectEntry={handleSelectSong}
             onSelectAll={handleSelectAll}
+            onBulkDelete={handleBulkDelete}
+            showBulkActions={true}
           />
         </CardContent>
       </Card>
