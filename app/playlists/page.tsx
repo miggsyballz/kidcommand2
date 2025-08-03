@@ -1,7 +1,10 @@
-"use client"
-
+import { DashboardLayout } from "@/components/dashboard-layout"
 import { SchedulingContent } from "@/components/scheduling-content"
 
 export default function PlaylistsPage() {
-  return <SchedulingContent />
+  return (
+    <DashboardLayout>
+      <SchedulingContent />
+    </DashboardLayout>
+  )
 }
