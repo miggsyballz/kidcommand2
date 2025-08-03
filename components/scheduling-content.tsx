@@ -67,6 +67,10 @@ export function SchedulingContent() {
   const [playlistEntries, setPlaylistEntries] = useState<PlaylistEntry[]>([])
   const [columns, setColumns] = useState<string[]>([])
   const [entriesLoading, setEntriesLoading] = useState(false)
+
+  // Bulk selection state
+  const [selectedEntries, setSelectedEntries] = useState<Set<number>>(new Set())
+
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([
     {
       id: "1",
@@ -165,6 +169,9 @@ export function SchedulingContent() {
       }
 
       setColumns(columnsToUse)
+
+      // Clear selection when switching playlists
+      setSelectedEntries(new Set())
     } catch (error) {
       console.error("Error fetching playlist entries:", error)
       toast.error("Failed to load playlist entries")
@@ -321,6 +328,51 @@ export function SchedulingContent() {
     setSelectedPlaylist(null)
     setPlaylistEntries([])
     setColumns([])
+    setSelectedEntries(new Set())
+  }
+
+  // Bulk selection handlers
+  const handleSelectEntry = (entryId: number, checked: boolean) => {
+    setSelectedEntries((prev) => {
+      const newSet = new Set(prev)
+      if (checked) {
+        newSet.add(entryId)
+      } else {
+        newSet.delete(entryId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedEntries(new Set(playlistEntries.map((entry) => entry.id)))
+    } else {
+      setSelectedEntries(new Set())
+    }
+  }
+
+  const handleBulkDelete = async (entryIds: number[]) => {
+    try {
+      const { error } = await supabase.from("playlist_entries").delete().in("id", entryIds)
+
+      if (error) throw error
+
+      // Update local state
+      setPlaylistEntries((prev) => prev.filter((entry) => !entryIds.includes(entry.id)))
+      setSelectedEntries(new Set())
+
+      // Update playlist song count
+      if (selectedPlaylist) {
+        const newCount = playlistEntries.length - entryIds.length
+        await supabase.from("playlists").update({ song_count: newCount }).eq("id", selectedPlaylist.id)
+      }
+
+      toast.success(`Deleted ${entryIds.length} ${entryIds.length === 1 ? "entry" : "entries"}`)
+    } catch (error) {
+      console.error("Error bulk deleting entries:", error)
+      toast.error("Failed to delete selected entries")
+    }
   }
 
   // Spreadsheet handlers
@@ -444,6 +496,14 @@ export function SchedulingContent() {
       if (error) throw error
 
       setPlaylistEntries((prev) => prev.filter((e) => e.id !== Number(entryId)))
+
+      // Remove from selection if it was selected
+      setSelectedEntries((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(Number(entryId))
+        return newSet
+      })
+
       toast.success("Entry deleted successfully")
     } catch (err) {
       console.error("Error deleting entry:", err)
@@ -602,6 +662,7 @@ export function SchedulingContent() {
                   <h1 className="text-xl font-bold">{selectedPlaylist.name}</h1>
                   <p className="text-sm text-muted-foreground">
                     {selectedPlaylist.description} • {playlistEntries.length} entries
+                    {selectedEntries.size > 0 && ` • ${selectedEntries.size} selected`}
                   </p>
                 </div>
               </div>
@@ -666,6 +727,11 @@ export function SchedulingContent() {
                         onDeleteEntry={handleDeleteEntry}
                         onAddColumn={handleAddColumn}
                         getEntryValue={(entry, column) => getEntryValue(entry as any, column)}
+                        selectedEntries={selectedEntries}
+                        onSelectEntry={handleSelectEntry}
+                        onSelectAll={handleSelectAll}
+                        onBulkDelete={handleBulkDelete}
+                        showBulkActions={true}
                       />
                     </div>
                   ) : (
