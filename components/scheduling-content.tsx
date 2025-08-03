@@ -766,8 +766,8 @@ export function SchedulingContent() {
       {/* Playlist Detail Dialog with Editable Spreadsheet */}
       {selectedPlaylist && (
         <Dialog open={!!selectedPlaylist} onOpenChange={() => setSelectedPlaylist(null)}>
-          <DialogContent className="max-w-7xl max-h-[90vh]">
-            <DialogHeader>
+          <DialogContent className="max-w-[95vw] max-h-[90vh] w-full">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle className="flex items-center gap-2">
                 <Music className="h-5 w-5" />
                 {selectedPlaylist.name}
@@ -777,42 +777,46 @@ export function SchedulingContent() {
               </DialogDescription>
             </DialogHeader>
 
-            {entriesLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                  <p className="text-muted-foreground">Loading schedule entries...</p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {playlistEntries.length > 0 ? (
-                  <SortableSpreadsheet
-                    entries={playlistEntries.map((entry) => ({
-                      id: entry.id.toString(),
-                      data: entry.data,
-                      position: entry.position,
-                      created_at: entry.created_at,
-                      playlist_id: entry.playlist_id,
-                    }))}
-                    columns={columns}
-                    onEntriesReorder={handleEntriesReorder}
-                    onColumnsReorder={handleColumnsReorder}
-                    onCellEdit={handleCellEdit}
-                    onHeaderEdit={handleHeaderEdit}
-                    onDeleteEntry={handleDeleteEntry}
-                    onAddColumn={handleAddColumn}
-                    getEntryValue={(entry, column) => getEntryValue(entry as any, column)}
-                  />
-                ) : (
-                  <div className="text-center py-12">
-                    <Music className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No entries in this schedule</h3>
-                    <p className="text-muted-foreground">This schedule doesn't have any songs yet.</p>
+            <div className="flex-1 min-h-0">
+              {entriesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading schedule entries...</p>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              ) : (
+                <div className="h-full">
+                  {playlistEntries.length > 0 ? (
+                    <div className="h-[60vh] overflow-hidden">
+                      <SortableSpreadsheet
+                        entries={playlistEntries.map((entry) => ({
+                          id: entry.id.toString(),
+                          data: entry.data,
+                          position: entry.position,
+                          created_at: entry.created_at,
+                          playlist_id: entry.playlist_id,
+                        }))}
+                        columns={columns}
+                        onEntriesReorder={handleEntriesReorder}
+                        onColumnsReorder={handleColumnsReorder}
+                        onCellEdit={handleCellEdit}
+                        onHeaderEdit={handleHeaderEdit}
+                        onDeleteEntry={handleDeleteEntry}
+                        onAddColumn={handleAddColumn}
+                        getEntryValue={(entry, column) => getEntryValue(entry as any, column)}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Music className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No entries in this schedule</h3>
+                      <p className="text-muted-foreground">This schedule doesn't have any songs yet.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </DialogContent>
         </Dialog>
       )}
