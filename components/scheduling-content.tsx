@@ -181,9 +181,21 @@ export function SchedulingContent() {
 
   const handleDeletePlaylist = async (id: string) => {
     try {
-      const { error } = await supabase.from("playlists").delete().eq("id", id)
+      // First delete all playlist entries to avoid foreign key constraint violation
+      const { error: entriesError } = await supabase.from("playlist_entries").delete().eq("playlist_id", id)
 
-      if (error) throw error
+      if (entriesError) {
+        console.error("Error deleting playlist entries:", entriesError)
+        throw new Error("Failed to delete playlist entries")
+      }
+
+      // Then delete the playlist
+      const { error: playlistError } = await supabase.from("playlists").delete().eq("id", id)
+
+      if (playlistError) {
+        console.error("Error deleting playlist:", playlistError)
+        throw new Error("Failed to delete playlist")
+      }
 
       toast.success("Playlist deleted successfully")
       fetchPlaylists()
@@ -388,7 +400,8 @@ export function SchedulingContent() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to delete "{playlist.name}"? This action cannot be undone.
+                                Are you sure you want to delete "{playlist.name}"? This action cannot be undone and will
+                                also delete all songs in this playlist.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -456,7 +469,8 @@ export function SchedulingContent() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to delete "{playlist.name}"? This action cannot be undone.
+                                Are you sure you want to delete "{playlist.name}"? This action cannot be undone and will
+                                also delete all songs in this playlist.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
