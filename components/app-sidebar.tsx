@@ -76,13 +76,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div className="flex items-center justify-between p-2">
           {!isCollapsed && (
             <div className="flex items-center gap-2">
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <GalleryVerticalEnd className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold text-sm">MUSIC MATRIX </span>
-                <span className="truncate text-xs">{"Scheduling Software"}</span>
-              </div>
+              <img src="/music-matrix-logo.png" alt="Music Matrix Logo" className="h-8 w-auto" />
             </div>
           )}
           <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8 ml-auto">
