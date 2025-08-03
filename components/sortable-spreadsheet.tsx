@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
-import { GripVertical, Trash2, Plus, Check, X } from "lucide-react"
+import { GripVertical, Trash2, Plus, Check, X, Edit2 } from "lucide-react"
 
 interface Entry {
   id: string
@@ -53,15 +53,36 @@ export function SortableSpreadsheet({
   const [editValue, setEditValue] = useState("")
   const [dragOverEntry, setDragOverEntry] = useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   const dragCounter = useRef(0)
+  const dragStartPos = useRef({ x: 0, y: 0 })
+  const dragThreshold = 5 // pixels to move before considering it a drag
 
   // Entry drag handlers
   const handleEntryDragStart = useCallback((e: React.DragEvent, entryId: string) => {
     setDraggedEntry(entryId)
+    setIsDragging(true)
     e.dataTransfer.effectAllowed = "move"
     e.dataTransfer.setData("text/plain", entryId)
   }, [])
+
+  const handleEntryMouseDown = useCallback((e: React.MouseEvent) => {
+    dragStartPos.current = { x: e.clientX, y: e.clientY }
+  }, [])
+
+  const handleEntryMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isDragging) {
+        const deltaX = Math.abs(e.clientX - dragStartPos.current.x)
+        const deltaY = Math.abs(e.clientY - dragStartPos.current.y)
+        if (deltaX > dragThreshold || deltaY > dragThreshold) {
+          setIsDragging(true)
+        }
+      }
+    },
+    [isDragging],
+  )
 
   const handleEntryDragOver = useCallback(
     (e: React.DragEvent, entryId: string) => {
@@ -93,6 +114,7 @@ export function SortableSpreadsheet({
       if (!draggedEntry || draggedEntry === targetEntryId) {
         setDraggedEntry(null)
         setDragOverEntry(null)
+        setIsDragging(false)
         return
       }
 
@@ -102,6 +124,7 @@ export function SortableSpreadsheet({
       if (draggedIndex === -1 || targetIndex === -1) {
         setDraggedEntry(null)
         setDragOverEntry(null)
+        setIsDragging(false)
         return
       }
 
@@ -118,6 +141,7 @@ export function SortableSpreadsheet({
       onEntriesReorder(updatedEntries)
       setDraggedEntry(null)
       setDragOverEntry(null)
+      setIsDragging(false)
     },
     [draggedEntry, entries, onEntriesReorder],
   )
@@ -125,6 +149,7 @@ export function SortableSpreadsheet({
   const handleEntryDragEnd = useCallback(() => {
     setDraggedEntry(null)
     setDragOverEntry(null)
+    setIsDragging(false)
     dragCounter.current = 0
   }, [])
 
@@ -181,8 +206,12 @@ export function SortableSpreadsheet({
     setDragOverColumn(null)
   }, [])
 
-  // Edit handlers
-  const handleCellDoubleClick = (entryId: string, column: string) => {
+  // Edit handlers - Single click to edit
+  const handleCellClick = (entryId: string, column: string, e: React.MouseEvent) => {
+    // Don't start editing if we're in the middle of a drag operation
+    if (isDragging) return
+
+    e.stopPropagation()
     const entry = entries.find((e) => e.id === entryId)
     if (entry) {
       setEditingCell({ entryId, column })
@@ -207,7 +236,8 @@ export function SortableSpreadsheet({
     setEditValue("")
   }
 
-  const handleHeaderDoubleClick = (column: string) => {
+  const handleHeaderClick = (column: string, e: React.MouseEvent) => {
+    e.stopPropagation()
     setEditingHeader(column)
     setEditValue(column)
   }
@@ -261,24 +291,27 @@ export function SortableSpreadsheet({
             )}
 
             {/* Drag handle column */}
-            <TableHead className="w-12"></TableHead>
+            <TableHead className="w-12">#</TableHead>
 
             {/* Data columns */}
             {columns.map((column) => (
               <TableHead
                 key={column}
-                className={`cursor-pointer select-none ${
+                className={`select-none ${
                   dragOverColumn === column ? "bg-blue-100 dark:bg-blue-900/20" : ""
                 } ${draggedColumn === column ? "opacity-50" : ""}`}
-                draggable
-                onDragStart={(e) => handleColumnDragStart(e, column)}
-                onDragOver={(e) => handleColumnDragOver(e, column)}
-                onDrop={(e) => handleColumnDrop(e, column)}
-                onDragEnd={handleColumnDragEnd}
-                onDoubleClick={() => handleHeaderDoubleClick(column)}
               >
                 <div className="flex items-center gap-2">
-                  <GripVertical className="h-3 w-3 text-muted-foreground" />
+                  <div
+                    className="cursor-grab active:cursor-grabbing"
+                    draggable
+                    onDragStart={(e) => handleColumnDragStart(e, column)}
+                    onDragOver={(e) => handleColumnDragOver(e, column)}
+                    onDrop={(e) => handleColumnDrop(e, column)}
+                    onDragEnd={handleColumnDragEnd}
+                  >
+                    <GripVertical className="h-3 w-3 text-muted-foreground" />
+                  </div>
                   {editingHeader === column ? (
                     <div className="flex items-center gap-1">
                       <Input
@@ -296,7 +329,13 @@ export function SortableSpreadsheet({
                       </Button>
                     </div>
                   ) : (
-                    <span className="truncate">{column}</span>
+                    <div
+                      className="flex items-center gap-1 cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded group"
+                      onClick={(e) => handleHeaderClick(column, e)}
+                    >
+                      <span className="truncate">{column}</span>
+                      <Edit2 className="h-3 w-3 opacity-0 group-hover:opacity-100" />
+                    </div>
                   )}
                 </div>
               </TableHead>
@@ -311,19 +350,12 @@ export function SortableSpreadsheet({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {entries.map((entry) => (
+          {entries.map((entry, index) => (
             <TableRow
               key={entry.id}
               className={`${dragOverEntry === entry.id ? "bg-blue-50 dark:bg-blue-900/10 border-l-4 border-blue-500" : ""} ${
                 draggedEntry === entry.id ? "opacity-50" : ""
               }`}
-              draggable
-              onDragStart={(e) => handleEntryDragStart(e, entry.id)}
-              onDragOver={(e) => handleEntryDragOver(e, entry.id)}
-              onDragEnter={handleEntryDragEnter}
-              onDragLeave={handleEntryDragLeave}
-              onDrop={(e) => handleEntryDrop(e, entry.id)}
-              onDragEnd={handleEntryDragEnd}
             >
               {/* Selection column */}
               {selectedEntries !== undefined && onSelectEntry && (
@@ -337,8 +369,22 @@ export function SortableSpreadsheet({
 
               {/* Drag handle column */}
               <TableCell>
-                <div className="cursor-grab active:cursor-grabbing">
-                  <GripVertical className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-1">
+                  <div
+                    className="cursor-grab active:cursor-grabbing"
+                    draggable
+                    onDragStart={(e) => handleEntryDragStart(e, entry.id)}
+                    onDragOver={(e) => handleEntryDragOver(e, entry.id)}
+                    onDragEnter={handleEntryDragEnter}
+                    onDragLeave={handleEntryDragLeave}
+                    onDrop={(e) => handleEntryDrop(e, entry.id)}
+                    onDragEnd={handleEntryDragEnd}
+                    onMouseDown={handleEntryMouseDown}
+                    onMouseMove={handleEntryMouseMove}
+                  >
+                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <span className="text-xs text-muted-foreground">{index + 1}</span>
                 </div>
               </TableCell>
 
@@ -347,7 +393,7 @@ export function SortableSpreadsheet({
                 <TableCell
                   key={`${entry.id}-${column}`}
                   className="cursor-pointer"
-                  onDoubleClick={() => handleCellDoubleClick(entry.id, column)}
+                  onClick={(e) => handleCellClick(entry.id, column, e)}
                 >
                   {editingCell?.entryId === entry.id && editingCell?.column === column ? (
                     <div className="flex items-center gap-1">
@@ -366,8 +412,12 @@ export function SortableSpreadsheet({
                       </Button>
                     </div>
                   ) : (
-                    <div className="truncate" title={getEntryValue(entry, column)}>
-                      {getEntryValue(entry, column)}
+                    <div
+                      className="hover:bg-muted/50 px-1 py-0.5 rounded group flex items-center gap-1"
+                      title={getEntryValue(entry, column)}
+                    >
+                      <span className="truncate">{getEntryValue(entry, column)}</span>
+                      <Edit2 className="h-3 w-3 opacity-0 group-hover:opacity-100" />
                     </div>
                   )}
                 </TableCell>
