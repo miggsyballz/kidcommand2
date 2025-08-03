@@ -1,238 +1,35 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
-import { GripVertical, Edit2, Save, X, Trash2, Plus } from "lucide-react"
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  DragOverlay,
-  type DragStartEvent,
-  type UniqueIdentifier,
-} from "@dnd-kit/core"
-import {
-  arrayMove,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  horizontalListSortingStrategy,
-} from "@dnd-kit/sortable"
-import { useSortable, SortableContext as SortableContextProvider } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
-import { parseDisplayValueForStorage, isDurationColumn } from "@/lib/duration-utils"
+import { GripVertical, Trash2, Plus, Check, X } from "lucide-react"
 
-interface SpreadsheetEntry {
+interface Entry {
   id: string
   data: Record<string, any>
   position: number
   created_at: string
-  playlist_id?: string | number
-  [key: string]: any
+  playlist_id?: number
 }
 
 interface SortableSpreadsheetProps {
-  entries: SpreadsheetEntry[]
+  entries: Entry[]
   columns: string[]
-  onEntriesReorder: (entries: SpreadsheetEntry[]) => Promise<void>
-  onColumnsReorder: (columns: string[]) => Promise<void>
+  onEntriesReorder: (entries: Entry[]) => void
+  onColumnsReorder: (columns: string[]) => void
   onCellEdit: (entryId: string, column: string, value: any) => Promise<void>
   onHeaderEdit: (oldColumn: string, newColumn: string) => Promise<void>
   onDeleteEntry: (entryId: string) => Promise<void>
-  onAddColumn: () => Promise<void>
-  getEntryValue: (entry: SpreadsheetEntry, column: string) => string
-  formatValue?: (value: any, column: string) => string
-  className?: string
+  onAddColumn: () => void
+  getEntryValue: (entry: Entry, column: string) => string
   selectedEntries?: Set<number>
   onSelectEntry?: (entryId: number, checked: boolean) => void
   onSelectAll?: (checked: boolean) => void
-}
-
-// Sortable Row Component
-function SortableRow({
-  entry,
-  index,
-  columns,
-  editingCell,
-  editValue,
-  onCellEdit,
-  onSaveCellEdit,
-  onCancelEdit,
-  onDeleteEntry,
-  setEditValue,
-  getEntryValue,
-  selectedEntries,
-  onSelectEntry,
-}: {
-  entry: SpreadsheetEntry
-  index: number
-  columns: string[]
-  editingCell: { entryId: string; column: string } | null
-  editValue: string
-  onCellEdit: (entryId: string, column: string, currentValue: string) => void
-  onSaveCellEdit: () => void
-  onCancelEdit: () => void
-  onDeleteEntry: (entryId: string) => void
-  setEditValue: (value: string) => void
-  getEntryValue: (entry: SpreadsheetEntry, column: string) => string
-  selectedEntries?: Set<number>
-  onSelectEntry?: (entryId: number, checked: boolean) => void
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  }
-
-  const isSelected = selectedEntries?.has(Number(entry.id)) || false
-
-  return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className={`border-b hover:bg-muted/50 ${isDragging ? "bg-muted" : ""} ${isSelected ? "bg-blue-50" : ""}`}
-    >
-      {onSelectEntry && (
-        <td className="py-1 px-2 w-12">
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={(checked) => onSelectEntry(Number(entry.id), checked as boolean)}
-          />
-        </td>
-      )}
-      <td className="py-1 px-2 text-xs text-muted-foreground w-16">
-        <div className="flex items-center gap-1">
-          <button className="cursor-grab hover:bg-muted rounded p-1" {...attributes} {...listeners}>
-            <GripVertical className="h-3 w-3 text-muted-foreground" />
-          </button>
-          {index + 1}
-        </div>
-      </td>
-      {columns.map((column) => {
-        const value = getEntryValue(entry, column)
-        const isEditing = editingCell?.entryId === entry.id && editingCell?.column === column
-
-        return (
-          <td key={column} className="py-1 px-2 max-w-[150px]">
-            {isEditing ? (
-              <div className="flex items-center gap-1">
-                <Input
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  className="h-6 text-xs"
-                  onKeyPress={(e) => e.key === "Enter" && onSaveCellEdit()}
-                  placeholder={isDurationColumn(column) ? "MM:SS" : ""}
-                />
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onSaveCellEdit}>
-                  <Save className="h-3 w-3" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onCancelEdit}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ) : (
-              <div
-                className="text-xs cursor-pointer hover:bg-muted/50 py-1 px-1 rounded group truncate"
-                onClick={() => onCellEdit(entry.id, column, value)}
-                title={`${column}: ${value}${isDurationColumn(column) ? " (Click to edit - use MM:SS format)" : ""}`}
-              >
-                <span className={value === "-" ? "text-muted-foreground" : ""}>{value}</span>
-                <Edit2 className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 inline" />
-              </div>
-            )}
-          </td>
-        )
-      })}
-      <td className="py-1 px-2 text-xs text-muted-foreground">{new Date(entry.created_at).toLocaleDateString()}</td>
-      <td className="py-1 px-2">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-6 w-6 text-red-500 hover:text-red-700"
-          onClick={() => onDeleteEntry(entry.id)}
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </td>
-    </tr>
-  )
-}
-
-// Sortable Header Component
-function SortableHeader({
-  column,
-  editingHeader,
-  editValue,
-  onHeaderEdit,
-  onSaveHeaderEdit,
-  onCancelEdit,
-  setEditValue,
-}: {
-  column: string
-  editingHeader: string | null
-  editValue: string
-  onHeaderEdit: (column: string) => void
-  onSaveHeaderEdit: () => void
-  onCancelEdit: () => void
-  setEditValue: (value: string) => void
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  }
-
-  return (
-    <th
-      ref={setNodeRef}
-      style={style}
-      className={`text-left py-1 px-2 font-medium text-xs min-w-[100px] max-w-[150px] ${isDragging ? "bg-muted" : ""}`}
-    >
-      {editingHeader === column ? (
-        <div className="flex items-center gap-1">
-          <Input
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            className="h-6 text-xs"
-            onKeyPress={(e) => e.key === "Enter" && onSaveHeaderEdit()}
-          />
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onSaveHeaderEdit}>
-            <Save className="h-3 w-3" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onCancelEdit}>
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1 group">
-          <button className="cursor-grab hover:bg-muted rounded p-1" {...attributes} {...listeners}>
-            <GripVertical className="h-3 w-3 text-muted-foreground" />
-          </button>
-          <span className="truncate" title={column}>
-            {column}
-            {isDurationColumn(column) && <span className="text-muted-foreground ml-1">(mm:ss)</span>}
-          </span>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-4 w-4 opacity-0 group-hover:opacity-100"
-            onClick={() => onHeaderEdit(column)}
-          >
-            <Edit2 className="h-3 w-3" />
-          </Button>
-        </div>
-      )}
-    </th>
-  )
 }
 
 export function SortableSpreadsheet({
@@ -245,217 +42,352 @@ export function SortableSpreadsheet({
   onDeleteEntry,
   onAddColumn,
   getEntryValue,
-  className = "",
   selectedEntries,
   onSelectEntry,
   onSelectAll,
 }: SortableSpreadsheetProps) {
+  const [draggedEntry, setDraggedEntry] = useState<string | null>(null)
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
   const [editingCell, setEditingCell] = useState<{ entryId: string; column: string } | null>(null)
   const [editingHeader, setEditingHeader] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
-  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
-  const [dragType, setDragType] = useState<"row" | "column" | null>(null)
+  const [dragOverEntry, setDragOverEntry] = useState<string | null>(null)
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
+  const dragCounter = useRef(0)
+
+  // Entry drag handlers
+  const handleEntryDragStart = useCallback((e: React.DragEvent, entryId: string) => {
+    setDraggedEntry(entryId)
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", entryId)
+  }, [])
+
+  const handleEntryDragOver = useCallback(
+    (e: React.DragEvent, entryId: string) => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = "move"
+      if (draggedEntry && draggedEntry !== entryId) {
+        setDragOverEntry(entryId)
+      }
+    },
+    [draggedEntry],
   )
 
-  const handleCellEdit = (entryId: string, column: string, currentValue: string) => {
-    setEditingCell({ entryId, column })
-    setEditValue(currentValue === "-" ? "" : currentValue)
+  const handleEntryDragLeave = useCallback((e: React.DragEvent) => {
+    dragCounter.current--
+    if (dragCounter.current === 0) {
+      setDragOverEntry(null)
+    }
+  }, [])
+
+  const handleEntryDragEnter = useCallback((e: React.DragEvent) => {
+    dragCounter.current++
+  }, [])
+
+  const handleEntryDrop = useCallback(
+    (e: React.DragEvent, targetEntryId: string) => {
+      e.preventDefault()
+      dragCounter.current = 0
+
+      if (!draggedEntry || draggedEntry === targetEntryId) {
+        setDraggedEntry(null)
+        setDragOverEntry(null)
+        return
+      }
+
+      const draggedIndex = entries.findIndex((entry) => entry.id === draggedEntry)
+      const targetIndex = entries.findIndex((entry) => entry.id === targetEntryId)
+
+      if (draggedIndex === -1 || targetIndex === -1) {
+        setDraggedEntry(null)
+        setDragOverEntry(null)
+        return
+      }
+
+      const newEntries = [...entries]
+      const [draggedItem] = newEntries.splice(draggedIndex, 1)
+      newEntries.splice(targetIndex, 0, draggedItem)
+
+      // Update positions
+      const updatedEntries = newEntries.map((entry, index) => ({
+        ...entry,
+        position: index + 1,
+      }))
+
+      onEntriesReorder(updatedEntries)
+      setDraggedEntry(null)
+      setDragOverEntry(null)
+    },
+    [draggedEntry, entries, onEntriesReorder],
+  )
+
+  const handleEntryDragEnd = useCallback(() => {
+    setDraggedEntry(null)
+    setDragOverEntry(null)
+    dragCounter.current = 0
+  }, [])
+
+  // Column drag handlers
+  const handleColumnDragStart = useCallback((e: React.DragEvent, column: string) => {
+    setDraggedColumn(column)
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", column)
+  }, [])
+
+  const handleColumnDragOver = useCallback(
+    (e: React.DragEvent, column: string) => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = "move"
+      if (draggedColumn && draggedColumn !== column) {
+        setDragOverColumn(column)
+      }
+    },
+    [draggedColumn],
+  )
+
+  const handleColumnDrop = useCallback(
+    (e: React.DragEvent, targetColumn: string) => {
+      e.preventDefault()
+
+      if (!draggedColumn || draggedColumn === targetColumn) {
+        setDraggedColumn(null)
+        setDragOverColumn(null)
+        return
+      }
+
+      const draggedIndex = columns.findIndex((col) => col === draggedColumn)
+      const targetIndex = columns.findIndex((col) => col === targetColumn)
+
+      if (draggedIndex === -1 || targetIndex === -1) {
+        setDraggedColumn(null)
+        setDragOverColumn(null)
+        return
+      }
+
+      const newColumns = [...columns]
+      const [draggedItem] = newColumns.splice(draggedIndex, 1)
+      newColumns.splice(targetIndex, 0, draggedItem)
+
+      onColumnsReorder(newColumns)
+      setDraggedColumn(null)
+      setDragOverColumn(null)
+    },
+    [draggedColumn, columns, onColumnsReorder],
+  )
+
+  const handleColumnDragEnd = useCallback(() => {
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }, [])
+
+  // Edit handlers
+  const handleCellDoubleClick = (entryId: string, column: string) => {
+    const entry = entries.find((e) => e.id === entryId)
+    if (entry) {
+      setEditingCell({ entryId, column })
+      setEditValue(getEntryValue(entry, column))
+    }
   }
 
-  const handleHeaderEdit = (column: string) => {
+  const handleCellEditSave = async () => {
+    if (!editingCell) return
+
+    try {
+      await onCellEdit(editingCell.entryId, editingCell.column, editValue)
+      setEditingCell(null)
+      setEditValue("")
+    } catch (error) {
+      console.error("Error saving cell edit:", error)
+    }
+  }
+
+  const handleCellEditCancel = () => {
+    setEditingCell(null)
+    setEditValue("")
+  }
+
+  const handleHeaderDoubleClick = (column: string) => {
     setEditingHeader(column)
     setEditValue(column)
   }
 
-  const saveCellEdit = async () => {
-    if (!editingCell) return
-
-    try {
-      // Convert display value back to storage format
-      const processedValue = parseDisplayValueForStorage(editValue, editingCell.column)
-
-      await onCellEdit(editingCell.entryId, editingCell.column, processedValue)
-
-      setEditingCell(null)
-      setEditValue("")
-    } catch (err) {
-      console.error("Error updating cell:", err)
-    }
-  }
-
-  const saveHeaderEdit = async () => {
+  const handleHeaderEditSave = async () => {
     if (!editingHeader || !editValue.trim()) return
 
     try {
       await onHeaderEdit(editingHeader, editValue.trim())
-
       setEditingHeader(null)
       setEditValue("")
-    } catch (err) {
-      console.error("Error updating header:", err)
+    } catch (error) {
+      console.error("Error saving header edit:", error)
     }
   }
 
-  const cancelEdit = () => {
-    setEditingCell(null)
+  const handleHeaderEditCancel = () => {
     setEditingHeader(null)
     setEditValue("")
   }
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event
-    setActiveId(active.id)
-
-    // Determine if we're dragging a row or column
-    const isColumn = columns.includes(active.id as string)
-    setDragType(isColumn ? "column" : "row")
-  }
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
-
-    if (!over || active.id === over.id) {
-      setActiveId(null)
-      setDragType(null)
-      return
-    }
-
-    if (dragType === "row") {
-      // Handle row reordering
-      const oldIndex = entries.findIndex((entry) => entry.id === active.id)
-      const newIndex = entries.findIndex((entry) => entry.id === over.id)
-
-      if (oldIndex !== newIndex) {
-        const newEntries = arrayMove(entries, oldIndex, newIndex).map((entry, index) => ({
-          ...entry,
-          position: index + 1,
-        }))
-
-        await onEntriesReorder(newEntries)
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      if (editingCell) {
+        handleCellEditSave()
+      } else if (editingHeader) {
+        handleHeaderEditSave()
       }
-    } else if (dragType === "column") {
-      // Handle column reordering
-      const oldIndex = columns.findIndex((column) => column === active.id)
-      const newIndex = columns.findIndex((column) => column === over.id)
-
-      if (oldIndex !== newIndex) {
-        const newColumns = arrayMove(columns, oldIndex, newIndex)
-        await onColumnsReorder(newColumns)
+    } else if (e.key === "Escape") {
+      if (editingCell) {
+        handleCellEditCancel()
+      } else if (editingHeader) {
+        handleHeaderEditCancel()
       }
     }
-
-    setActiveId(null)
-    setDragType(null)
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className={`space-y-4 ${className}`}>
-        {/* Add Column Button */}
-        <div className="flex justify-end">
-          <Button onClick={onAddColumn} variant="outline" size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Column
-          </Button>
-        </div>
+    <div className="w-full h-full overflow-auto border rounded-lg">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {/* Selection column */}
+            {selectedEntries !== undefined && onSelectEntry && onSelectAll && (
+              <TableHead className="w-12">
+                <Checkbox
+                  checked={selectedEntries.size === entries.length && entries.length > 0}
+                  onCheckedChange={onSelectAll}
+                />
+              </TableHead>
+            )}
 
-        {/* Spreadsheet Table */}
-        {entries.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <div className="h-12 w-12 mx-auto mb-4 opacity-50 rounded-full bg-muted flex items-center justify-center">
-              <GripVertical className="h-6 w-6" />
-            </div>
-            <p>No entries found.</p>
-            <p className="text-sm">Add some data to get started!</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b">
-                  {onSelectEntry && (
-                    <th className="text-left py-1 px-2 font-medium text-xs w-12">
-                      <Checkbox
-                        checked={selectedEntries?.size === entries.length && entries.length > 0}
-                        onCheckedChange={onSelectAll}
+            {/* Drag handle column */}
+            <TableHead className="w-12"></TableHead>
+
+            {/* Data columns */}
+            {columns.map((column) => (
+              <TableHead
+                key={column}
+                className={`cursor-pointer select-none ${
+                  dragOverColumn === column ? "bg-blue-100 dark:bg-blue-900/20" : ""
+                } ${draggedColumn === column ? "opacity-50" : ""}`}
+                draggable
+                onDragStart={(e) => handleColumnDragStart(e, column)}
+                onDragOver={(e) => handleColumnDragOver(e, column)}
+                onDrop={(e) => handleColumnDrop(e, column)}
+                onDragEnd={handleColumnDragEnd}
+                onDoubleClick={() => handleHeaderDoubleClick(column)}
+              >
+                <div className="flex items-center gap-2">
+                  <GripVertical className="h-3 w-3 text-muted-foreground" />
+                  {editingHeader === column ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={handleKeyPress}
+                        className="h-6 text-xs"
+                        autoFocus
                       />
-                    </th>
+                      <Button size="sm" variant="ghost" onClick={handleHeaderEditSave} className="h-6 w-6 p-0">
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleHeaderEditCancel} className="h-6 w-6 p-0">
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="truncate">{column}</span>
                   )}
-                  <th className="text-left py-1 px-2 font-medium text-xs w-16">#</th>
-                  <SortableContextProvider items={columns} strategy={horizontalListSortingStrategy}>
-                    {columns.map((column) => (
-                      <SortableHeader
-                        key={column}
-                        column={column}
-                        editingHeader={editingHeader}
-                        editValue={editValue}
-                        onHeaderEdit={handleHeaderEdit}
-                        onSaveHeaderEdit={saveHeaderEdit}
-                        onCancelEdit={cancelEdit}
-                        setEditValue={setEditValue}
-                      />
-                    ))}
-                  </SortableContextProvider>
-                  <th className="text-left py-1 px-2 font-medium text-xs w-20">Created</th>
-                  <th className="text-left py-1 px-2 font-medium text-xs w-16">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <SortableContextProvider items={entries.map((e) => e.id)} strategy={verticalListSortingStrategy}>
-                  {entries.map((entry, index) => (
-                    <SortableRow
-                      key={entry.id}
-                      entry={entry}
-                      index={index}
-                      columns={columns}
-                      editingCell={editingCell}
-                      editValue={editValue}
-                      onCellEdit={handleCellEdit}
-                      onSaveCellEdit={saveCellEdit}
-                      onCancelEdit={cancelEdit}
-                      onDeleteEntry={onDeleteEntry}
-                      setEditValue={setEditValue}
-                      getEntryValue={getEntryValue}
-                      selectedEntries={selectedEntries}
-                      onSelectEntry={onSelectEntry}
-                    />
-                  ))}
-                </SortableContextProvider>
-              </tbody>
-            </table>
-          </div>
-        )}
+                </div>
+              </TableHead>
+            ))}
 
-        {/* Drag Overlay */}
-        <DragOverlay>
-          {activeId && dragType === "row" ? (
-            <div className="bg-background border rounded shadow-lg p-2 opacity-90">
-              <div className="flex items-center gap-2">
-                <GripVertical className="h-4 w-4" />
-                <span className="text-sm font-medium">Row {entries.findIndex((e) => e.id === activeId) + 1}</span>
-              </div>
-            </div>
-          ) : activeId && dragType === "column" ? (
-            <div className="bg-background border rounded shadow-lg p-2 opacity-90">
-              <div className="flex items-center gap-2">
-                <GripVertical className="h-4 w-4" />
-                <span className="text-sm font-medium">{activeId}</span>
-              </div>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </div>
-    </DndContext>
+            {/* Actions column */}
+            <TableHead className="w-20">
+              <Button size="sm" variant="ghost" onClick={onAddColumn} className="h-6 w-6 p-0">
+                <Plus className="h-3 w-3" />
+              </Button>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {entries.map((entry) => (
+            <TableRow
+              key={entry.id}
+              className={`${dragOverEntry === entry.id ? "bg-blue-50 dark:bg-blue-900/10 border-l-4 border-blue-500" : ""} ${
+                draggedEntry === entry.id ? "opacity-50" : ""
+              }`}
+              draggable
+              onDragStart={(e) => handleEntryDragStart(e, entry.id)}
+              onDragOver={(e) => handleEntryDragOver(e, entry.id)}
+              onDragEnter={handleEntryDragEnter}
+              onDragLeave={handleEntryDragLeave}
+              onDrop={(e) => handleEntryDrop(e, entry.id)}
+              onDragEnd={handleEntryDragEnd}
+            >
+              {/* Selection column */}
+              {selectedEntries !== undefined && onSelectEntry && (
+                <TableCell>
+                  <Checkbox
+                    checked={selectedEntries.has(Number(entry.id))}
+                    onCheckedChange={(checked) => onSelectEntry(Number(entry.id), checked as boolean)}
+                  />
+                </TableCell>
+              )}
+
+              {/* Drag handle column */}
+              <TableCell>
+                <div className="cursor-grab active:cursor-grabbing">
+                  <GripVertical className="h-4 w-4 text-muted-foreground" />
+                </div>
+              </TableCell>
+
+              {/* Data columns */}
+              {columns.map((column) => (
+                <TableCell
+                  key={`${entry.id}-${column}`}
+                  className="cursor-pointer"
+                  onDoubleClick={() => handleCellDoubleClick(entry.id, column)}
+                >
+                  {editingCell?.entryId === entry.id && editingCell?.column === column ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={handleKeyPress}
+                        className="h-8 text-sm"
+                        autoFocus
+                      />
+                      <Button size="sm" variant="ghost" onClick={handleCellEditSave} className="h-8 w-8 p-0">
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleCellEditCancel} className="h-8 w-8 p-0">
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="truncate" title={getEntryValue(entry, column)}>
+                      {getEntryValue(entry, column)}
+                    </div>
+                  )}
+                </TableCell>
+              ))}
+
+              {/* Actions column */}
+              <TableCell>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onDeleteEntry(entry.id)}
+                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
