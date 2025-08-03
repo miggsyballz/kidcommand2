@@ -1,78 +1,100 @@
 "use client"
+
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Music, Radio, Calendar, BarChart3 } from "lucide-react"
+import { Music, Radio, Zap, Brain, Headphones } from "lucide-react"
 
 export default function SplashPage() {
   const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleEnter = () => {
+  const handleEnter = async () => {
+    setIsLoading(true)
+    // Set authentication state
     localStorage.setItem("isAuthenticated", "true")
+
+    // Navigate to dashboard
     router.push("/dashboard")
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
+    <div className="h-screen w-screen overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
       <div className="max-w-4xl mx-auto px-6 text-center">
         {/* Logo and Title */}
         <div className="mb-8">
           <div className="flex items-center justify-center mb-4">
-            <div className="bg-blue-600 p-3 rounded-xl">
-              <Music className="h-8 w-8 text-white" />
+            <div className="bg-white/10 backdrop-blur-sm rounded-full p-4">
+              <Music className="h-12 w-12 text-white" />
             </div>
           </div>
-          <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">Music Matrix</h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
-            Professional Radio Scheduling & Music Management Platform
-          </p>
+          <h1 className="text-5xl font-bold text-white mb-4">Music Matrix</h1>
+          <p className="text-xl text-white/80 mb-8">AI-Driven Radio Scheduling Interface</p>
         </div>
 
         {/* Feature Cards */}
         <div className="grid md:grid-cols-3 gap-6 mb-12">
-          <Card className="border-0 shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <Card className="bg-white/10 backdrop-blur-sm border-white/20 text-white">
             <CardHeader>
-              <Radio className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+              <Radio className="h-8 w-8 mb-2 text-blue-400" />
               <CardTitle className="text-lg">Smart Scheduling</CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription>AI-powered music scheduling with rotation rules and category management</CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-            <CardHeader>
-              <Calendar className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-              <CardTitle className="text-lg">Playlist Management</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Create, edit, and manage playlists with advanced filtering and organization
+              <CardDescription className="text-white/70">
+                AI-powered playlist generation and radio scheduling automation
               </CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+          <Card className="bg-white/10 backdrop-blur-sm border-white/20 text-white">
             <CardHeader>
-              <BarChart3 className="h-8 w-8 text-green-600 mx-auto mb-2" />
-              <CardTitle className="text-lg">Analytics & Insights</CardTitle>
+              <Brain className="h-8 w-8 mb-2 text-purple-400" />
+              <CardTitle className="text-lg">AI Assistant</CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription>Track performance, analyze trends, and optimize your music programming</CardDescription>
+              <CardDescription className="text-white/70">
+                Voice-enabled AI assistant for music curation and management
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/10 backdrop-blur-sm border-white/20 text-white">
+            <CardHeader>
+              <Zap className="h-8 w-8 mb-2 text-yellow-400" />
+              <CardTitle className="text-lg">Real-time Sync</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-white/70">
+                Live playlist updates and seamless music library management
+              </CardDescription>
             </CardContent>
           </Card>
         </div>
 
         {/* CTA Button */}
-        <div className="space-y-4">
-          <Button
-            onClick={handleEnter}
-            size="lg"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
-          >
-            Enter Music Matrix
-          </Button>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Professional radio scheduling made simple</p>
+        <Button
+          onClick={handleEnter}
+          disabled={isLoading}
+          size="lg"
+          className="bg-white text-slate-900 hover:bg-white/90 px-8 py-3 text-lg font-semibold"
+        >
+          {isLoading ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-900 mr-2"></div>
+              Loading...
+            </>
+          ) : (
+            <>
+              <Headphones className="mr-2 h-5 w-5" />
+              Enter Music Matrix
+            </>
+          )}
+        </Button>
+
+        {/* Footer */}
+        <div className="mt-12 text-white/60 text-sm">
+          <p>Powered by AI • Built for Radio Professionals</p>
         </div>
       </div>
     </div>
