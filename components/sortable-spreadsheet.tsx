@@ -74,12 +74,20 @@ export function SortableSpreadsheet({
 
   const tableRef = useRef<HTMLTableElement>(null)
 
-  // Initialize column widths
+  // Calculate minimum width needed for column header text
+  const getMinColumnWidth = (column: string) => {
+    // Base width calculation: character count * average character width + padding
+    const headerTextWidth = column.length * 8 + 40 // 8px per character + 40px padding for icons/grip
+    const minWidth = Math.max(120, headerTextWidth) // Minimum 120px, but expand for longer headers
+    return Math.min(minWidth, 300) // Cap at 300px to prevent extremely wide columns
+  }
+
+  // Initialize column widths with better defaults
   useEffect(() => {
     const newWidths: Record<string, number> = {}
     columns.forEach((column) => {
       if (!columnWidths[column]) {
-        newWidths[column] = 120
+        newWidths[column] = getMinColumnWidth(column)
       }
     })
     if (Object.keys(newWidths).length > 0) {
@@ -220,7 +228,7 @@ export function SortableSpreadsheet({
     setIsResizing(true)
     setResizingColumn(column)
     setStartX(e.clientX)
-    setStartWidth(columnWidths[column] || 120)
+    setStartWidth(columnWidths[column] || getMinColumnWidth(column))
   }
 
   const handleMouseMove = useCallback(
@@ -254,19 +262,19 @@ export function SortableSpreadsheet({
     }
   }, [isResizing, handleMouseMove, handleMouseUp])
 
-  // Auto-fit column
+  // Auto-fit column with better width calculation
   const handleDoubleClick = (column: string) => {
-    let maxWidth = 80
-    const headerWidth = column.length * 8 + 60
-    maxWidth = Math.max(maxWidth, headerWidth)
+    let maxWidth = getMinColumnWidth(column)
 
+    // Check content width for all entries
     entries.forEach((entry) => {
       const value = getEntryValue(entry, column)
       const cellWidth = value.length * 7 + 20
       maxWidth = Math.max(maxWidth, cellWidth)
     })
 
-    maxWidth = Math.min(maxWidth, 300)
+    // Cap at reasonable maximum
+    maxWidth = Math.min(maxWidth, 400)
 
     setColumnWidths((prev) => ({
       ...prev,
@@ -428,7 +436,10 @@ export function SortableSpreadsheet({
                     className={`text-left py-1 px-2 font-medium text-xs relative ${
                       dragOverColumnIndex === columnIndex ? "bg-blue-100 dark:bg-blue-900/20" : ""
                     } ${draggedColumnIndex === columnIndex ? "opacity-50" : ""}`}
-                    style={{ width: `${columnWidths[column] || 120}px` }}
+                    style={{
+                      width: `${columnWidths[column] || getMinColumnWidth(column)}px`,
+                      minWidth: `${getMinColumnWidth(column)}px`,
+                    }}
                   >
                     {editingHeader === column ? (
                       <div className="flex items-center gap-1">
@@ -449,7 +460,7 @@ export function SortableSpreadsheet({
                     ) : (
                       <div className="flex items-center gap-1 group">
                         <div
-                          className="cursor-grab hover:bg-muted rounded p-1"
+                          className="cursor-grab hover:bg-muted rounded p-1 flex-shrink-0"
                           draggable
                           onDragStart={(e) => handleColumnDragStart(e, columnIndex)}
                           onDragOver={(e) => handleColumnDragOver(e, columnIndex)}
@@ -459,17 +470,19 @@ export function SortableSpreadsheet({
                           <GripVertical className="h-3 w-3 text-muted-foreground" />
                         </div>
                         <span
-                          className="truncate flex-1 cursor-pointer"
+                          className="flex-1 cursor-pointer min-w-0 overflow-hidden"
                           title={column}
                           onClick={(e) => handleHeaderClick(column, e)}
                         >
-                          {column}
-                          {isDurationColumn(column) && <span className="text-muted-foreground ml-1">(mm:ss)</span>}
+                          <span className="block truncate">
+                            {column}
+                            {isDurationColumn(column) && <span className="text-muted-foreground ml-1">(mm:ss)</span>}
+                          </span>
                         </span>
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-4 w-4 opacity-0 group-hover:opacity-100"
+                          className="h-4 w-4 opacity-0 group-hover:opacity-100 flex-shrink-0"
                           onClick={(e) => handleHeaderClick(column, e)}
                         >
                           <Edit2 className="h-3 w-3" />
@@ -544,7 +557,11 @@ export function SortableSpreadsheet({
                       const isEditing = editingCell?.entryId === entry.id && editingCell?.column === column
 
                       return (
-                        <td key={column} className="py-1 px-2" style={{ width: `${columnWidths[column] || 120}px` }}>
+                        <td
+                          key={column}
+                          className="py-1 px-2"
+                          style={{ width: `${columnWidths[column] || getMinColumnWidth(column)}px` }}
+                        >
                           {isEditing ? (
                             <div className="flex items-center gap-1">
                               <Input
