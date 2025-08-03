@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { List, Grid, Trash2, Save, Send, Bot, Music, Calendar, X, ArrowLeft, Clock } from "lucide-react"
+import { List, Grid, Trash2, Save, Send, Bot, Music, Calendar, X, ArrowLeft, Clock, GripVertical } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { SortableSpreadsheet } from "./sortable-spreadsheet"
@@ -31,6 +33,7 @@ interface Playlist {
   total_duration: string
   created_at: string
   column_structure?: string
+  position?: number
 }
 
 interface PlaylistEntry {
@@ -61,12 +64,14 @@ interface AIMessage {
 
 export function SchedulingContent() {
   const [playlists, setPlaylists] = useState<Playlist[]>([])
-  const [viewMode, setViewMode] = useState<"cards" | "list">("cards")
+  const [viewMode, setViewMode] = useState<"cards" | "list">("list") // Changed default to list
   const [loading, setLoading] = useState(true)
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null)
   const [playlistEntries, setPlaylistEntries] = useState<PlaylistEntry[]>([])
   const [columns, setColumns] = useState<string[]>([])
   const [entriesLoading, setEntriesLoading] = useState(false)
+  const [draggedItem, setDraggedItem] = useState<string | null>(null)
+  const [dragOverItem, setDragOverItem] = useState<string | null>(null)
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([
     {
       id: "1",
@@ -87,7 +92,14 @@ export function SchedulingContent() {
       const { data, error } = await supabase.from("playlists").select("*").order("created_at", { ascending: false })
 
       if (error) throw error
-      setPlaylists(data || [])
+
+      // Add position property for drag and drop
+      const playlistsWithPosition = (data || []).map((playlist, index) => ({
+        ...playlist,
+        position: index,
+      }))
+
+      setPlaylists(playlistsWithPosition)
     } catch (error) {
       console.error("Error fetching playlists:", error)
       toast.error("Failed to load playlists")
@@ -321,6 +333,58 @@ export function SchedulingContent() {
     setSelectedPlaylist(null)
     setPlaylistEntries([])
     setColumns([])
+  }
+
+  // Drag and drop handlers for playlist reordering
+  const handleDragStart = (e: React.DragEvent, playlistId: string) => {
+    setDraggedItem(playlistId)
+    e.dataTransfer.effectAllowed = "move"
+  }
+
+  const handleDragOver = (e: React.DragEvent, playlistId: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    setDragOverItem(playlistId)
+  }
+
+  const handleDragLeave = () => {
+    setDragOverItem(null)
+  }
+
+  const handleDrop = (e: React.DragEvent, targetPlaylistId: string) => {
+    e.preventDefault()
+
+    if (!draggedItem || draggedItem === targetPlaylistId) {
+      setDraggedItem(null)
+      setDragOverItem(null)
+      return
+    }
+
+    const draggedIndex = playlists.findIndex((p) => p.id === draggedItem)
+    const targetIndex = playlists.findIndex((p) => p.id === targetPlaylistId)
+
+    if (draggedIndex === -1 || targetIndex === -1) return
+
+    const newPlaylists = [...playlists]
+    const [draggedPlaylist] = newPlaylists.splice(draggedIndex, 1)
+    newPlaylists.splice(targetIndex, 0, draggedPlaylist)
+
+    // Update positions
+    const updatedPlaylists = newPlaylists.map((playlist, index) => ({
+      ...playlist,
+      position: index,
+    }))
+
+    setPlaylists(updatedPlaylists)
+    setDraggedItem(null)
+    setDragOverItem(null)
+
+    toast.success("Playlist order updated")
+  }
+
+  const handleDragEnd = () => {
+    setDraggedItem(null)
+    setDragOverItem(null)
   }
 
   // Spreadsheet handlers
@@ -613,7 +677,9 @@ export function SchedulingContent() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-bold">Your Schedules</h1>
-                <p className="text-sm text-muted-foreground">Manage your saved playlists and schedules</p>
+                <p className="text-sm text-muted-foreground">
+                  Manage your saved playlists and schedules • Drag to reorder
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -763,9 +829,20 @@ export function SchedulingContent() {
                           {playlists.map((playlist) => (
                             <div
                               key={playlist.id}
-                              className="flex items-center justify-between p-4 hover:bg-muted/50 cursor-pointer"
+                              className={`flex items-center gap-3 p-4 hover:bg-muted/50 cursor-pointer transition-colors ${
+                                dragOverItem === playlist.id ? "bg-muted border-l-4 border-primary" : ""
+                              } ${draggedItem === playlist.id ? "opacity-50" : ""}`}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, playlist.id)}
+                              onDragOver={(e) => handleDragOver(e, playlist.id)}
+                              onDragLeave={handleDragLeave}
+                              onDrop={(e) => handleDrop(e, playlist.id)}
+                              onDragEnd={handleDragEnd}
                               onClick={() => handleViewPlaylist(playlist)}
                             >
+                              <div className="cursor-grab active:cursor-grabbing">
+                                <GripVertical className="h-4 w-4 text-muted-foreground" />
+                              </div>
                               <div className="space-y-1 flex-1 min-w-0">
                                 <h4 className="font-medium text-sm truncate">{playlist.name}</h4>
                                 {playlist.description && (
