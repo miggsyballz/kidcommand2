@@ -32,6 +32,8 @@ interface SortableSpreadsheetProps {
   selectedEntries?: Set<number>
   onSelectEntry?: (entryId: number, checked: boolean) => void
   onSelectAll?: (checked: boolean) => void
+  onBulkDelete?: (entryIds: number[]) => Promise<void>
+  showBulkActions?: boolean
 }
 
 export function SortableSpreadsheet({
@@ -45,9 +47,11 @@ export function SortableSpreadsheet({
   onAddColumn,
   getEntryValue,
   className = "",
-  selectedEntries,
+  selectedEntries = new Set(),
   onSelectEntry,
   onSelectAll,
+  onBulkDelete,
+  showBulkActions = true,
 }: SortableSpreadsheetProps) {
   // Editing state
   const [editingCell, setEditingCell] = useState<{ entryId: string; column: string } | null>(null)
@@ -322,8 +326,62 @@ export function SortableSpreadsheet({
     setEditValue("")
   }
 
+  // Bulk selection handlers
+  const handleSelectEntry = (entryId: number, checked: boolean) => {
+    if (onSelectEntry) {
+      onSelectEntry(entryId, checked)
+    }
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (onSelectAll) {
+      onSelectAll(checked)
+    }
+  }
+
+  const handleBulkDeleteClick = async () => {
+    if (onBulkDelete && selectedEntries.size > 0) {
+      const entryIds = Array.from(selectedEntries)
+      try {
+        await onBulkDelete(entryIds)
+      } catch (error) {
+        console.error("Error bulk deleting entries:", error)
+      }
+    }
+  }
+
+  const isAllSelected = selectedEntries.size === entries.length && entries.length > 0
+  const isIndeterminate = selectedEntries.size > 0 && selectedEntries.size < entries.length
+
   return (
     <div className={`space-y-4 ${className}`}>
+      {/* Bulk Actions Bar */}
+      {showBulkActions && selectedEntries.size > 0 && (
+        <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+              {selectedEntries.size} {selectedEntries.size === 1 ? "entry" : "entries"} selected
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {onBulkDelete && (
+              <Button
+                onClick={handleBulkDeleteClick}
+                variant="destructive"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Selected
+              </Button>
+            )}
+            <Button onClick={() => handleSelectAll(false)} variant="outline" size="sm">
+              Clear Selection
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Add Column Button */}
       <div className="flex justify-end">
         <Button onClick={onAddColumn} variant="outline" size="sm">
@@ -346,15 +404,24 @@ export function SortableSpreadsheet({
           <table ref={tableRef} className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
             <thead>
               <tr className="border-b">
-                {onSelectEntry && (
+                {/* Selection Column */}
+                {showBulkActions && onSelectEntry && onSelectAll && (
                   <th className="text-left py-1 px-2 font-medium text-xs w-12">
                     <Checkbox
-                      checked={selectedEntries?.size === entries.length && entries.length > 0}
-                      onCheckedChange={onSelectAll}
+                      checked={isAllSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isIndeterminate
+                      }}
+                      onCheckedChange={handleSelectAll}
+                      title={isAllSelected ? "Deselect all" : "Select all"}
                     />
                   </th>
                 )}
+
+                {/* Row Number Column */}
                 <th className="text-left py-1 px-2 font-medium text-xs w-16">#</th>
+
+                {/* Data Columns */}
                 {columns.map((column, columnIndex) => (
                   <th
                     key={column}
@@ -419,99 +486,118 @@ export function SortableSpreadsheet({
                     />
                   </th>
                 ))}
+
+                {/* Created Column */}
                 <th className="text-left py-1 px-2 font-medium text-xs w-20">Created</th>
+
+                {/* Actions Column */}
                 <th className="text-left py-1 px-2 font-medium text-xs w-16">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry, rowIndex) => (
-                <tr
-                  key={entry.id}
-                  className={`border-b hover:bg-muted/50 ${
-                    dragOverRowIndex === rowIndex ? "bg-blue-50 dark:bg-blue-900/10 border-l-4 border-blue-500" : ""
-                  } ${draggedRowIndex === rowIndex ? "opacity-50" : ""} ${
-                    selectedEntries?.has(Number(entry.id)) ? "bg-blue-50" : ""
-                  }`}
-                  onDragOver={(e) => handleRowDragOver(e, rowIndex)}
-                  onDragEnter={(e) => handleRowDragEnter(e, rowIndex)}
-                  onDragLeave={handleRowDragLeave}
-                  onDrop={(e) => handleRowDrop(e, rowIndex)}
-                >
-                  {onSelectEntry && (
-                    <td className="py-1 px-2 w-12">
-                      <Checkbox
-                        checked={selectedEntries?.has(Number(entry.id)) || false}
-                        onCheckedChange={(checked) => onSelectEntry(Number(entry.id), checked as boolean)}
-                      />
-                    </td>
-                  )}
-                  <td className="py-1 px-2 text-xs text-muted-foreground w-16">
-                    <div className="flex items-center gap-1">
-                      <div
-                        className="cursor-grab hover:bg-muted rounded p-1 active:cursor-grabbing"
-                        draggable
-                        onDragStart={(e) => handleRowDragStart(e, rowIndex)}
-                        onDragEnd={handleRowDragEnd}
-                        title="Drag to reorder row"
-                      >
-                        <GripVertical className="h-3 w-3 text-muted-foreground" />
-                      </div>
-                      {rowIndex + 1}
-                    </div>
-                  </td>
-                  {columns.map((column) => {
-                    const value = getEntryValue(entry, column)
-                    const isEditing = editingCell?.entryId === entry.id && editingCell?.column === column
+              {entries.map((entry, rowIndex) => {
+                const isSelected = selectedEntries.has(Number(entry.id))
 
-                    return (
-                      <td key={column} className="py-1 px-2" style={{ width: `${columnWidths[column] || 120}px` }}>
-                        {isEditing ? (
-                          <div className="flex items-center gap-1">
-                            <Input
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="h-6 text-xs"
-                              onKeyPress={(e) => e.key === "Enter" && saveCellEdit()}
-                              placeholder={isDurationColumn(column) ? "MM:SS" : ""}
-                              autoFocus
-                            />
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveCellEdit}>
-                              <Save className="h-3 w-3" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={cancelEdit}>
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div
-                            className="text-xs cursor-pointer hover:bg-muted/50 py-1 px-1 rounded group truncate"
-                            onClick={(e) => handleCellClick(entry.id, column, e)}
-                            title={`${column}: ${value}${
-                              isDurationColumn(column) ? " (Click to edit - use MM:SS format)" : ""
-                            }`}
-                          >
-                            <span className={value === "-" ? "text-muted-foreground" : ""}>{value}</span>
-                            <Edit2 className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 inline" />
-                          </div>
-                        )}
+                return (
+                  <tr
+                    key={entry.id}
+                    className={`border-b hover:bg-muted/50 ${
+                      dragOverRowIndex === rowIndex ? "bg-blue-50 dark:bg-blue-900/10 border-l-4 border-blue-500" : ""
+                    } ${draggedRowIndex === rowIndex ? "opacity-50" : ""} ${
+                      isSelected ? "bg-blue-50 dark:bg-blue-950/30" : ""
+                    }`}
+                    onDragOver={(e) => handleRowDragOver(e, rowIndex)}
+                    onDragEnter={(e) => handleRowDragEnter(e, rowIndex)}
+                    onDragLeave={handleRowDragLeave}
+                    onDrop={(e) => handleRowDrop(e, rowIndex)}
+                  >
+                    {/* Selection Column */}
+                    {showBulkActions && onSelectEntry && (
+                      <td className="py-1 px-2 w-12">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) => handleSelectEntry(Number(entry.id), checked as boolean)}
+                          title={isSelected ? "Deselect this entry" : "Select this entry"}
+                        />
                       </td>
-                    )
-                  })}
-                  <td className="py-1 px-2 text-xs text-muted-foreground">
-                    {new Date(entry.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="py-1 px-2">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 text-red-500 hover:text-red-700"
-                      onClick={() => onDeleteEntry(entry.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+                    )}
+
+                    {/* Row Number Column */}
+                    <td className="py-1 px-2 text-xs text-muted-foreground w-16">
+                      <div className="flex items-center gap-1">
+                        <div
+                          className="cursor-grab hover:bg-muted rounded p-1 active:cursor-grabbing"
+                          draggable
+                          onDragStart={(e) => handleRowDragStart(e, rowIndex)}
+                          onDragEnd={handleRowDragEnd}
+                          title="Drag to reorder row"
+                        >
+                          <GripVertical className="h-3 w-3 text-muted-foreground" />
+                        </div>
+                        {rowIndex + 1}
+                      </div>
+                    </td>
+
+                    {/* Data Columns */}
+                    {columns.map((column) => {
+                      const value = getEntryValue(entry, column)
+                      const isEditing = editingCell?.entryId === entry.id && editingCell?.column === column
+
+                      return (
+                        <td key={column} className="py-1 px-2" style={{ width: `${columnWidths[column] || 120}px` }}>
+                          {isEditing ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="h-6 text-xs"
+                                onKeyPress={(e) => e.key === "Enter" && saveCellEdit()}
+                                placeholder={isDurationColumn(column) ? "MM:SS" : ""}
+                                autoFocus
+                              />
+                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveCellEdit}>
+                                <Save className="h-3 w-3" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={cancelEdit}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div
+                              className="text-xs cursor-pointer hover:bg-muted/50 py-1 px-1 rounded group truncate"
+                              onClick={(e) => handleCellClick(entry.id, column, e)}
+                              title={`${column}: ${value}${
+                                isDurationColumn(column) ? " (Click to edit - use MM:SS format)" : ""
+                              }`}
+                            >
+                              <span className={value === "-" ? "text-muted-foreground" : ""}>{value}</span>
+                              <Edit2 className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 inline" />
+                            </div>
+                          )}
+                        </td>
+                      )
+                    })}
+
+                    {/* Created Column */}
+                    <td className="py-1 px-2 text-xs text-muted-foreground">
+                      {new Date(entry.created_at).toLocaleDateString()}
+                    </td>
+
+                    {/* Actions Column */}
+                    <td className="py-1 px-2">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-red-500 hover:text-red-700"
+                        onClick={() => onDeleteEntry(entry.id)}
+                        title="Delete this entry"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
