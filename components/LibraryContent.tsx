@@ -4,10 +4,18 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Music, AlertCircle, Upload, CheckCircle2, FileText, X } from "lucide-react"
+import { Music, AlertCircle, Upload, CheckCircle2, FileText, X, Info } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
 import { useRef } from "react"
 import { SortableSpreadsheet } from "./sortable-spreadsheet"
@@ -31,6 +39,13 @@ interface Playlist {
   column_structure?: string
 }
 
+interface DuplicateInfo {
+  found: number
+  skipped: number
+  uploaded: number
+  duplicates: Array<{ title: string; artist: string }>
+}
+
 export function LibraryContent() {
   const [songs, setSongs] = useState<Song[]>([])
   const [playlists, setPlaylists] = useState<Playlist[]>([])
@@ -44,10 +59,11 @@ export function LibraryContent() {
   const [csvData, setCsvData] = useState<any[]>([])
   const [headers, setHeaders] = useState<string[]>([])
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>("new")
-  const [deduplicateMode, setDeduplicateMode] = useState<"skip" | "create">("skip")
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
+  const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null)
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -183,17 +199,28 @@ export function LibraryContent() {
   }
 
   const checkForDuplicates = async (entries: any[]) => {
-    const duplicates = []
+    const duplicates: Array<{ title: string; artist: string; row: any }> = []
+
     for (const entry of entries) {
-      if (!entry.Title && !entry.Artist) continue
+      const title = entry.Title || entry.title || ""
+      const artist = entry.Artist || entry.artist || ""
+
+      // Skip entries without both title and artist
+      if (!title.trim() || !artist.trim()) continue
+
+      // Check if this combination already exists in the database
       const { data, error } = await supabase
         .from("playlist_entries")
         .select("id")
-        .eq("Title", entry.Title)
-        .eq("Artist", entry.Artist)
+        .ilike("data->>Title", title.trim())
+        .ilike("data->>Artist", artist.trim())
         .limit(1)
-      if (!error && data && data.length > 0) duplicates.push(entry)
+
+      if (!error && data && data.length > 0) {
+        duplicates.push({ title: title.trim(), artist: artist.trim(), row: entry })
+      }
     }
+
     return duplicates
   }
 
@@ -205,6 +232,17 @@ export function LibraryContent() {
     setUploadSuccess(null)
 
     try {
+      // Check for duplicates first
+      const duplicates = await checkForDuplicates(csvData)
+      const duplicateSet = new Set(duplicates.map((d) => `${d.title.toLowerCase()}-${d.artist.toLowerCase()}`))
+
+      // Filter out duplicates
+      const uniqueEntries = csvData.filter((row) => {
+        const title = (row.Title || row.title || "").trim().toLowerCase()
+        const artist = (row.Artist || row.artist || "").trim().toLowerCase()
+        return !duplicateSet.has(`${title}-${artist}`)
+      })
+
       let playlistId = selectedPlaylistId
       if (!playlistId || playlistId === "new") {
         const { data: playlist, error } = await supabase
@@ -222,35 +260,48 @@ export function LibraryContent() {
         playlistId = playlist.id
       }
 
-      let entries = csvData.map((row, index) => ({
+      const entries = uniqueEntries.map((row, index) => ({
         playlist_id: playlistId,
         source_file: selectedFile.name,
         position: index + 1,
         data: row,
       }))
 
-      if (deduplicateMode === "skip") {
-        const duplicates = await checkForDuplicates(csvData)
-        const duplicateSet = new Set(duplicates.map((d) => `${d.Title}-${d.Artist}`))
-        entries = entries.filter((e) => !duplicateSet.has(`${e.data.Title}-${e.data.Artist}`))
+      if (entries.length > 0) {
+        const { error: insertError } = await supabase.from("playlist_entries").insert(entries)
+        if (insertError) throw new Error(insertError.message)
+
+        await supabase.from("playlists").update({ song_count: entries.length }).eq("id", playlistId)
       }
 
-      const { error: insertError } = await supabase.from("playlist_entries").insert(entries)
-      if (insertError) throw new Error(insertError.message)
+      // Set duplicate info for dialog
+      const duplicateInfo: DuplicateInfo = {
+        found: csvData.length,
+        skipped: duplicates.length,
+        uploaded: entries.length,
+        duplicates: duplicates.map((d) => ({ title: d.title, artist: d.artist })),
+      }
 
-      await supabase.from("playlists").update({ song_count: entries.length }).eq("id", playlistId)
+      setDuplicateInfo(duplicateInfo)
 
-      setUploadSuccess(`Uploaded ${entries.length} songs successfully.`)
+      if (duplicates.length > 0) {
+        setShowDuplicateDialog(true)
+      } else {
+        setUploadSuccess(`Successfully uploaded ${entries.length} songs.`)
+      }
 
       // Refresh the data
       await fetchData()
 
+      // Clear form after successful upload
       setTimeout(() => {
         setSelectedFile(null)
         setCsvData([])
         setHeaders([])
         fileInputRef.current?.value && (fileInputRef.current.value = "")
-        setUploadSuccess(null)
+        if (duplicates.length === 0) {
+          setUploadSuccess(null)
+        }
       }, 3000)
     } catch (err) {
       console.error(err)
@@ -419,6 +470,16 @@ export function LibraryContent() {
     }
   }
 
+  const handleCloseDuplicateDialog = () => {
+    setShowDuplicateDialog(false)
+    if (duplicateInfo) {
+      setUploadSuccess(
+        `Successfully uploaded ${duplicateInfo.uploaded} songs. ${duplicateInfo.skipped} duplicates were skipped.`,
+      )
+    }
+    setDuplicateInfo(null)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -460,6 +521,68 @@ export function LibraryContent() {
 
   return (
     <div className="space-y-6">
+      {/* Duplicate Detection Dialog */}
+      <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Info className="h-5 w-5 text-blue-500" />
+              Duplicate Songs Detected
+            </DialogTitle>
+            <DialogDescription>
+              Some songs in your upload already exist in the library and were automatically skipped.
+            </DialogDescription>
+          </DialogHeader>
+
+          {duplicateInfo && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{duplicateInfo.found}</div>
+                  <div className="text-sm text-blue-600">Total Songs</div>
+                </div>
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{duplicateInfo.uploaded}</div>
+                  <div className="text-sm text-green-600">Uploaded</div>
+                </div>
+                <div className="bg-orange-50 p-3 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-600">{duplicateInfo.skipped}</div>
+                  <div className="text-sm text-orange-600">Skipped</div>
+                </div>
+              </div>
+
+              {duplicateInfo.duplicates.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2">Skipped Duplicates:</h4>
+                  <div className="max-h-48 overflow-y-auto border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Artist</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {duplicateInfo.duplicates.map((duplicate, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{duplicate.title}</TableCell>
+                            <TableCell>{duplicate.artist}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={handleCloseDuplicateDialog}>Continue</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -525,16 +648,11 @@ export function LibraryContent() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Duplicate Handling</label>
-              <Select onValueChange={(val: "skip" | "create") => setDeduplicateMode(val)} defaultValue="skip">
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="skip">Skip Duplicates</SelectItem>
-                  <SelectItem value="create">Create Anyway</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">Duplicate Detection</label>
+              <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                <Info className="h-4 w-4 text-blue-500" />
+                <span className="text-sm text-blue-700">Duplicates automatically skipped</span>
+              </div>
             </div>
           </div>
 
