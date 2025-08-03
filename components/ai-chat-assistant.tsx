@@ -22,7 +22,7 @@ export function AIChatAssistant() {
     {
       id: "1",
       content:
-        "Hello! I'm your AI music assistant. I can help you with playlist management, song recommendations, and music scheduling. How can I assist you today?",
+        "Hello! I'm your AI music assistant. I can help you manage your music library, create playlists, and answer questions about your tracks. How can I help you today?",
       role: "assistant",
       timestamp: new Date(),
     },
@@ -35,49 +35,48 @@ export function AIChatAssistant() {
   const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   useEffect(() => {
-    // Initialize speech recognition
-    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
-      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition
-      recognitionRef.current = new SpeechRecognition()
-      recognitionRef.current.continuous = false
-      recognitionRef.current.interimResults = false
-      recognitionRef.current.lang = "en-US"
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight
+    }
+  }, [messages])
 
-      recognitionRef.current.onresult = (event) => {
+  useEffect(() => {
+    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
+      const recognition = new (window as any).webkitSpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.lang = "en-US"
+
+      recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript
         setInput(transcript)
         setIsListening(false)
       }
 
-      recognitionRef.current.onerror = () => {
+      recognition.onerror = () => {
         setIsListening(false)
       }
 
-      recognitionRef.current.onend = () => {
+      recognition.onend = () => {
         setIsListening(false)
+      }
+
+      recognitionRef.current = recognition
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
       }
     }
   }, [])
 
-  const scrollToBottom = () => {
-    if (scrollAreaRef.current) {
-      const scrollContainer = scrollAreaRef.current.querySelector("[data-radix-scroll-area-viewport]")
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight
-      }
-    }
-  }
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
   const handleSendMessage = async () => {
-    if (!input.trim() || isLoading) return
+    if (!input.trim()) return
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: input.trim(),
+      content: input,
       role: "user",
       timestamp: new Date(),
     }
@@ -93,7 +92,7 @@ export function AIChatAssistant() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: input.trim(),
+          message: input,
           history: messages,
         }),
       })
@@ -134,14 +133,7 @@ export function AIChatAssistant() {
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
-    }
-  }
-
-  const toggleListening = () => {
+  const handleVoiceInput = () => {
     if (!recognitionRef.current) return
 
     if (isListening) {
@@ -153,80 +145,95 @@ export function AIChatAssistant() {
     }
   }
 
-  const toggleSpeaking = () => {
+  const handleStopSpeaking = () => {
     if ("speechSynthesis" in window) {
-      if (isSpeaking) {
-        speechSynthesis.cancel()
-        setIsSpeaking(false)
-      }
+      speechSynthesis.cancel()
+      setIsSpeaking(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
     }
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <Card className="flex-1 flex flex-col">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            AI Music Assistant
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={toggleSpeaking} disabled={!isSpeaking}>
-                {isSpeaking ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </Button>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col">
-          <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
-            <div className="space-y-4">
-              {messages.map((message) => (
-                <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                      message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-                    }`}
-                  >
-                    <p className="text-sm">{message.content}</p>
-                    <p className="text-xs opacity-70 mt-1">{message.timestamp.toLocaleTimeString()}</p>
-                  </div>
-                </div>
-              ))}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg px-4 py-2">
-                    <div className="flex items-center space-x-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-                      <p className="text-sm">AI is thinking...</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-
-          <div className="flex items-center space-x-2 mt-4">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Ask me about music, playlists, or scheduling..."
-              disabled={isLoading}
-              className="flex-1"
-            />
+    <Card className="h-[600px] flex flex-col">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          AI Music Assistant
+          <div className="flex gap-2">
             <Button
               variant="outline"
-              size="icon"
-              onClick={toggleListening}
+              size="sm"
+              onClick={handleVoiceInput}
               disabled={isLoading}
-              className={isListening ? "bg-red-100 border-red-300" : ""}
+              className={isListening ? "bg-red-100 text-red-600" : ""}
             >
               {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
-            <Button onClick={handleSendMessage} disabled={isLoading || !input.trim()}>
-              <Send className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleStopSpeaking}
+              disabled={!isSpeaking}
+              className={isSpeaking ? "bg-blue-100 text-blue-600" : ""}
+            >
+              {isSpeaking ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 flex flex-col gap-4">
+        <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
+          <div className="space-y-4">
+            {messages.map((message) => (
+              <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                    message.role === "user" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-900"
+                  }`}
+                >
+                  <p className="text-sm">{message.content}</p>
+                  <p className="text-xs opacity-70 mt-1">{message.timestamp.toLocaleTimeString()}</p>
+                </div>
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 rounded-lg px-4 py-2">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.1s" }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.2s" }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+        <div className="flex gap-2">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={isListening ? "Listening..." : "Ask me about your music library..."}
+            disabled={isLoading || isListening}
+            className="flex-1"
+          />
+          <Button onClick={handleSendMessage} disabled={isLoading || !input.trim()}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

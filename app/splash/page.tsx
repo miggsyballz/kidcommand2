@@ -1,100 +1,98 @@
 "use client"
 
-import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Music, Radio, Zap, Brain, Headphones } from "lucide-react"
+import { Music, Radio, Mic, Settings, Zap, Users } from "lucide-react"
 
 export default function SplashPage() {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
 
-  const handleEnter = async () => {
-    setIsLoading(true)
-    // Set authentication state
+  const handleEnter = () => {
     localStorage.setItem("isAuthenticated", "true")
-
-    // Navigate to dashboard
     router.push("/dashboard")
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+    <div className="h-screen w-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
       <div className="max-w-4xl mx-auto px-6 text-center">
-        {/* Logo and Title */}
-        <div className="mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <div className="bg-white/10 backdrop-blur-sm rounded-full p-4">
-              <Music className="h-12 w-12 text-white" />
+        {/* Hero Section */}
+        <div className="mb-12">
+          <div className="flex items-center justify-center mb-6">
+            <div className="bg-blue-600 p-3 rounded-full">
+              <Music className="h-8 w-8 text-white" />
             </div>
           </div>
-          <h1 className="text-5xl font-bold text-white mb-4">Music Matrix</h1>
-          <p className="text-xl text-white/80 mb-8">AI-Driven Radio Scheduling Interface</p>
+          <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">Music Matrix</h1>
+          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
+            Professional Radio Scheduling & Music Management Platform
+          </p>
+          <Button
+            onClick={handleEnter}
+            size="lg"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+          >
+            Enter Music Matrix
+          </Button>
         </div>
 
-        {/* Feature Cards */}
+        {/* Features Grid */}
         <div className="grid md:grid-cols-3 gap-6 mb-12">
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20 text-white">
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
             <CardHeader>
-              <Radio className="h-8 w-8 mb-2 text-blue-400" />
+              <div className="bg-green-100 p-2 rounded-full w-fit mx-auto mb-2">
+                <Radio className="h-6 w-6 text-green-600" />
+              </div>
               <CardTitle className="text-lg">Smart Scheduling</CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-white/70">
-                AI-powered playlist generation and radio scheduling automation
+              <CardDescription>
+                AI-powered playlist generation and intelligent music scheduling for radio stations
               </CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20 text-white">
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
             <CardHeader>
-              <Brain className="h-8 w-8 mb-2 text-purple-400" />
-              <CardTitle className="text-lg">AI Assistant</CardTitle>
+              <div className="bg-purple-100 p-2 rounded-full w-fit mx-auto mb-2">
+                <Mic className="h-6 w-6 text-purple-600" />
+              </div>
+              <CardTitle className="text-lg">Voice Assistant</CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-white/70">
-                Voice-enabled AI assistant for music curation and management
-              </CardDescription>
+              <CardDescription>Voice-controlled music management and hands-free playlist creation</CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/10 backdrop-blur-sm border-white/20 text-white">
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
             <CardHeader>
-              <Zap className="h-8 w-8 mb-2 text-yellow-400" />
-              <CardTitle className="text-lg">Real-time Sync</CardTitle>
+              <div className="bg-orange-100 p-2 rounded-full w-fit mx-auto mb-2">
+                <Settings className="h-6 w-6 text-orange-600" />
+              </div>
+              <CardTitle className="text-lg">Advanced Controls</CardTitle>
             </CardHeader>
             <CardContent>
-              <CardDescription className="text-white/70">
-                Live playlist updates and seamless music library management
+              <CardDescription>
+                Comprehensive music library management with advanced filtering and organization
               </CardDescription>
             </CardContent>
           </Card>
         </div>
 
-        {/* CTA Button */}
-        <Button
-          onClick={handleEnter}
-          disabled={isLoading}
-          size="lg"
-          className="bg-white text-slate-900 hover:bg-white/90 px-8 py-3 text-lg font-semibold"
-        >
-          {isLoading ? (
-            <>
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-900 mr-2"></div>
-              Loading...
-            </>
-          ) : (
-            <>
-              <Headphones className="mr-2 h-5 w-5" />
-              Enter Music Matrix
-            </>
-          )}
-        </Button>
-
-        {/* Footer */}
-        <div className="mt-12 text-white/60 text-sm">
-          <p>Powered by AI • Built for Radio Professionals</p>
+        {/* Bottom Features */}
+        <div className="flex items-center justify-center space-x-8 text-gray-600 dark:text-gray-400">
+          <div className="flex items-center space-x-2">
+            <Zap className="h-5 w-5" />
+            <span>Lightning Fast</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Users className="h-5 w-5" />
+            <span>Multi-User</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Music className="h-5 w-5" />
+            <span>Professional Grade</span>
+          </div>
         </div>
       </div>
     </div>
