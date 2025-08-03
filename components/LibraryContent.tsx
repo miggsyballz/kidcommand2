@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Music, AlertCircle, Upload, CheckCircle2, FileText, X, Info, Trash2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -654,38 +653,6 @@ export function LibraryContent() {
               <AlertDescription>{uploadError}</AlertDescription>
             </Alert>
           )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Add to Playlist</label>
-              <Select onValueChange={(val) => setSelectedPlaylistId(val)} defaultValue="new">
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose a playlist..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new">
-                    <div className="flex items-center gap-2">
-                      <Music className="h-4 w-4" />
-                      Create New Playlist
-                    </div>
-                  </SelectItem>
-                  {playlists.map((p) => (
-                    <SelectItem key={p.id} value={p.id.toString()}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Duplicate Detection</label>
-              <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
-                <Info className="h-4 w-4 text-blue-500" />
-                <span className="text-sm text-blue-700">Duplicates automatically skipped</span>
-              </div>
-            </div>
-          </div>
 
           <div className="relative border-2 border-dashed rounded-lg p-6 text-center">
             {selectedFile ? (
