@@ -76,7 +76,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div className="flex items-center justify-between p-2">
           {!isCollapsed && (
             <div className="flex items-center gap-2">
-              <img src="/music-matrix-logo.png" alt="Music Matrix Logo" className="h-12 w-auto" />
+              <img src="/music-matrix-logo.png" alt="Music Matrix Logo" className="h-16 w-auto" />
             </div>
           )}
           <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8 ml-auto">
