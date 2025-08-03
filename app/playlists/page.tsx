@@ -1,10 +1,10 @@
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { PlaylistManagerContent } from "@/components/PlaylistManagerContent"
+import { SchedulingContent } from "@/components/scheduling-content"
 
-export default function PlaylistsPage() {
+export default function SchedulingPage() {
   return (
     <DashboardLayout>
-      <PlaylistManagerContent />
+      <SchedulingContent />
     </DashboardLayout>
   )
 }
