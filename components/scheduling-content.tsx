@@ -64,14 +64,13 @@ interface AIMessage {
 
 export function SchedulingContent() {
   const [playlists, setPlaylists] = useState<Playlist[]>([])
-  const [viewMode, setViewMode] = useState<"cards" | "list">("list") // Changed default to list
+  const [viewMode, setViewMode] = useState<"cards" | "list">("list")
   const [loading, setLoading] = useState(true)
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null)
   const [playlistEntries, setPlaylistEntries] = useState<PlaylistEntry[]>([])
   const [columns, setColumns] = useState<string[]>([])
   const [entriesLoading, setEntriesLoading] = useState(false)
   const [draggedItem, setDraggedItem] = useState<string | null>(null)
-  const [dragOverItem, setDragOverItem] = useState<string | null>(null)
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([
     {
       id: "1",
@@ -335,39 +334,11 @@ export function SchedulingContent() {
     setColumns([])
   }
 
-  // Drag and drop handlers for playlist reordering
-  const handleDragStart = (e: React.DragEvent, playlistId: string) => {
-    setDraggedItem(playlistId)
-    e.dataTransfer.effectAllowed = "move"
-  }
-
-  const handleDragOver = (e: React.DragEvent, playlistId: string) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
-    setDragOverItem(playlistId)
-  }
-
-  const handleDragLeave = () => {
-    setDragOverItem(null)
-  }
-
-  const handleDrop = (e: React.DragEvent, targetPlaylistId: string) => {
-    e.preventDefault()
-
-    if (!draggedItem || draggedItem === targetPlaylistId) {
-      setDraggedItem(null)
-      setDragOverItem(null)
-      return
-    }
-
-    const draggedIndex = playlists.findIndex((p) => p.id === draggedItem)
-    const targetIndex = playlists.findIndex((p) => p.id === targetPlaylistId)
-
-    if (draggedIndex === -1 || targetIndex === -1) return
-
+  // Simplified drag and drop handlers
+  const movePlaylist = (fromIndex: number, toIndex: number) => {
     const newPlaylists = [...playlists]
-    const [draggedPlaylist] = newPlaylists.splice(draggedIndex, 1)
-    newPlaylists.splice(targetIndex, 0, draggedPlaylist)
+    const [movedPlaylist] = newPlaylists.splice(fromIndex, 1)
+    newPlaylists.splice(toIndex, 0, movedPlaylist)
 
     // Update positions
     const updatedPlaylists = newPlaylists.map((playlist, index) => ({
@@ -376,15 +347,40 @@ export function SchedulingContent() {
     }))
 
     setPlaylists(updatedPlaylists)
-    setDraggedItem(null)
-    setDragOverItem(null)
-
     toast.success("Playlist order updated")
+  }
+
+  const handleDragStart = (e: React.DragEvent, playlistId: string) => {
+    setDraggedItem(playlistId)
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", playlistId)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+  }
+
+  const handleDrop = (e: React.DragEvent, targetPlaylistId: string) => {
+    e.preventDefault()
+
+    if (!draggedItem || draggedItem === targetPlaylistId) {
+      setDraggedItem(null)
+      return
+    }
+
+    const fromIndex = playlists.findIndex((p) => p.id === draggedItem)
+    const toIndex = playlists.findIndex((p) => p.id === targetPlaylistId)
+
+    if (fromIndex !== -1 && toIndex !== -1) {
+      movePlaylist(fromIndex, toIndex)
+    }
+
+    setDraggedItem(null)
   }
 
   const handleDragEnd = () => {
     setDraggedItem(null)
-    setDragOverItem(null)
   }
 
   // Spreadsheet handlers
@@ -829,21 +825,25 @@ export function SchedulingContent() {
                           {playlists.map((playlist) => (
                             <div
                               key={playlist.id}
-                              className={`flex items-center gap-3 p-4 hover:bg-muted/50 cursor-pointer transition-colors ${
-                                dragOverItem === playlist.id ? "bg-muted border-l-4 border-primary" : ""
-                              } ${draggedItem === playlist.id ? "opacity-50" : ""}`}
+                              className={`flex items-center gap-3 p-4 transition-colors ${
+                                draggedItem === playlist.id ? "opacity-50" : ""
+                              }`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, playlist.id)}
-                              onDragOver={(e) => handleDragOver(e, playlist.id)}
-                              onDragLeave={handleDragLeave}
+                              onDragOver={handleDragOver}
                               onDrop={(e) => handleDrop(e, playlist.id)}
                               onDragEnd={handleDragEnd}
-                              onClick={() => handleViewPlaylist(playlist)}
                             >
-                              <div className="cursor-grab active:cursor-grabbing">
+                              <div
+                                className="cursor-grab active:cursor-grabbing p-1"
+                                onMouseDown={(e) => e.stopPropagation()}
+                              >
                                 <GripVertical className="h-4 w-4 text-muted-foreground" />
                               </div>
-                              <div className="space-y-1 flex-1 min-w-0">
+                              <div
+                                className="space-y-1 flex-1 min-w-0 cursor-pointer hover:bg-muted/50 p-2 rounded"
+                                onClick={() => handleViewPlaylist(playlist)}
+                              >
                                 <h4 className="font-medium text-sm truncate">{playlist.name}</h4>
                                 {playlist.description && (
                                   <p className="text-xs text-muted-foreground truncate">{playlist.description}</p>
